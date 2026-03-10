@@ -1,53 +1,64 @@
-import { useEffect } from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import axios from "axios";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { AuthProvider } from "./contexts/AuthContext";
+import { ThemeProvider } from "./contexts/ThemeContext";
+import { Toaster } from "./components/ui/sonner";
+import Navbar from "./components/layout/Navbar";
+import ProtectedRoute from "./components/ProtectedRoute";
+import Landing from "./pages/Landing";
+import Login from "./pages/Login";
+import Signup from "./pages/Signup";
+import AuthCallback from "./pages/AuthCallback";
+import Dashboard from "./pages/Dashboard";
+import RoleSetup from "./pages/RoleSetup";
+import ResumeSetup from "./pages/ResumeSetup";
+import LiveInterview from "./pages/LiveInterview";
+import InterviewReview from "./pages/InterviewReview";
+import InterviewHistory from "./pages/InterviewHistory";
+import Profile from "./pages/Profile";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+function AppRouter() {
+  const location = useLocation();
 
-const Home = () => {
-  const helloWorldApi = async () => {
-    try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
-    }
-  };
+  // Check URL fragment for session_id synchronously (prevents race conditions)
+  if (location.hash?.includes('session_id=')) {
+    return <AuthCallback />;
+  }
 
-  useEffect(() => {
-    helloWorldApi();
-  }, []);
+  // Pages where navbar should be hidden
+  const hideNavbar = ['/', '/login', '/signup'].includes(location.pathname);
+  // Live interview page has its own top bar
+  const isLiveInterview = location.pathname.includes('/live');
 
   return (
-    <div>
-      <header className="App-header">
-        <a
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
+    <>
+      {!hideNavbar && !isLiveInterview && <Navbar />}
+      <Routes>
+        <Route path="/" element={<Landing />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
+        <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/interview/role" element={<ProtectedRoute><RoleSetup /></ProtectedRoute>} />
+        <Route path="/interview/resume" element={<ProtectedRoute><ResumeSetup /></ProtectedRoute>} />
+        <Route path="/interview/:interviewId/live" element={<ProtectedRoute><LiveInterview /></ProtectedRoute>} />
+        <Route path="/interview/:interviewId/review" element={<ProtectedRoute><InterviewReview /></ProtectedRoute>} />
+        <Route path="/history" element={<ProtectedRoute><InterviewHistory /></ProtectedRoute>} />
+        <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+      </Routes>
+    </>
   );
-};
+}
 
 function App() {
   return (
-    <div className="App">
+    <ThemeProvider>
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
-          </Route>
-        </Routes>
+        <AuthProvider>
+          <AppRouter />
+          <Toaster position="bottom-right" richColors />
+        </AuthProvider>
       </BrowserRouter>
-    </div>
+    </ThemeProvider>
   );
 }
 
