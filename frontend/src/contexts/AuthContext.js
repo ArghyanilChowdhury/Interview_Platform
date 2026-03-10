@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import axios from 'axios';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -8,28 +8,41 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [token, setToken] = useState(localStorage.getItem('auth_token'));
+  const tokenRef = useRef(localStorage.getItem('auth_token'));
 
   const getAuthHeaders = useCallback(() => {
-    const t = token || localStorage.getItem('auth_token');
+    const t = tokenRef.current || localStorage.getItem('auth_token');
     return t ? { Authorization: `Bearer ${t}` } : {};
-  }, [token]);
+  }, []);
 
   const checkAuth = useCallback(async () => {
+    const storedToken = localStorage.getItem('auth_token');
+    const authType = localStorage.getItem('auth_type');
+    
+    // For JWT auth, require token
+    // For Google auth, cookies are used (withCredentials handles it)
+    if (!storedToken && authType !== 'google') {
+      setUser(null);
+      setLoading(false);
+      return;
+    }
+
     try {
+      const headers = storedToken ? { Authorization: `Bearer ${storedToken}` } : {};
       const res = await axios.get(`${API}/auth/me`, {
-        headers: getAuthHeaders(),
+        headers,
         withCredentials: true
       });
       setUser(res.data);
     } catch {
       setUser(null);
       localStorage.removeItem('auth_token');
-      setToken(null);
+      localStorage.removeItem('auth_type');
+      tokenRef.current = null;
     } finally {
       setLoading(false);
     }
-  }, [getAuthHeaders]);
+  }, []);
 
   useEffect(() => {
     // CRITICAL: If returning from OAuth callback, skip the /me check.
@@ -43,21 +56,21 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     const res = await axios.post(`${API}/auth/login`, { email, password }, { withCredentials: true });
-    setUser(res.data);
     if (res.data.token) {
       localStorage.setItem('auth_token', res.data.token);
-      setToken(res.data.token);
+      tokenRef.current = res.data.token;
     }
+    setUser(res.data);
     return res.data;
   };
 
   const register = async (email, password, name) => {
     const res = await axios.post(`${API}/auth/register`, { email, password, name }, { withCredentials: true });
-    setUser(res.data);
     if (res.data.token) {
       localStorage.setItem('auth_token', res.data.token);
-      setToken(res.data.token);
+      tokenRef.current = res.data.token;
     }
+    setUser(res.data);
     return res.data;
   };
 
@@ -72,6 +85,11 @@ export function AuthProvider({ children }) {
       headers: { 'X-Session-ID': sessionId },
       withCredentials: true
     });
+    // Store session token for persistence
+    if (res.data.user_id) {
+      // For Google auth, we rely on httpOnly cookie, but also store a flag
+      localStorage.setItem('auth_type', 'google');
+    }
     setUser(res.data);
     return res.data;
   };
@@ -85,12 +103,13 @@ export function AuthProvider({ children }) {
     } catch { /* ignore */ }
     setUser(null);
     localStorage.removeItem('auth_token');
-    setToken(null);
+    localStorage.removeItem('auth_type');
+    tokenRef.current = null;
   };
 
   return (
     <AuthContext.Provider value={{
-      user, loading, token, login, register, loginWithGoogle,
+      user, loading, login, register, loginWithGoogle,
       exchangeSession, logout, checkAuth, getAuthHeaders
     }}>
       {children}
