@@ -1,0 +1,139 @@
+{
+  "project_name": "InterviewMaster",
+  "design_philosophy": {
+    "persona": "E1 - The Anti-AI Designer",
+    "core_concept": "The Performance Pro",
+    "vibe": "Elite Athleticism, Precision, Clarity, Growth",
+    "theme_strategy": "Toggle Required. Dark Mode = Deep Work/Coding environment. Light Mode = HR/Resume focus.",
+    "anti_patterns": [
+      "No generic 'Corporate Blue' gradients",
+      "No rounded-xl 'soft' SaaS cards - go sharper",
+      "No boring Bootstrap grids - use Bento layouts",
+      "No 'Inter' for headings - use character"
+    ]
+  },
+  "typography": {
+    "font_family": {
+      "headings": "Plus Jakarta Sans, sans-serif",
+      "body": "Inter, sans-serif",
+      "mono": "JetBrains Mono, monospace"
+    },
+    "scale": {
+      "h1": "text-4xl md:text-6xl font-bold tracking-tight",
+      "h2": "text-3xl md:text-4xl font-semibold tracking-tight",
+      "h3": "text-2xl font-semibold tracking-tight",
+      "body": "text-base leading-relaxed",
+      "small": "text-sm font-medium text-muted-foreground",
+      "label": "text-xs font-bold uppercase tracking-wider text-muted-foreground"
+    },
+    "installation": "Imports will be handled via Google Fonts in index.html or CSS"
+  },
+  "colors": {
+    "palette": {
+      "light": {
+        "background": "#ffffff",
+        "foreground": "#0f172a",
+        "card": "#f8fafc",
+        "card_foreground": "#0f172a",
+        "border": "#e2e8f0",
+        "primary": "#2563eb",
+        "primary_foreground": "#ffffff",
+        "muted": "#f1f5f9",
+        "muted_foreground": "#64748b"
+      },
+      "dark": {
+        "background": "#09090b",
+        "foreground": "#f8fafc",
+        "card": "#18181b",
+        "card_foreground": "#f8fafc",
+        "border": "#27272a",
+        "primary": "#3b82f6",
+        "primary_foreground": "#ffffff",
+        "muted": "#27272a",
+        "muted_foreground": "#a1a1aa"
+      }
+    },
+    "special_tokens": {
+      "brand_accent": "#2563eb",
+      "success": "#10b981",
+      "error": "#e11d48",
+      "warning": "#f59e0b",
+      "glass_bg": "rgba(255, 255, 255, 0.05)",
+      "glass_border": "rgba(255, 255, 255, 0.1)"
+    }
+  },
+  "layout_system": {
+    "grid_strategy": "Bento Grid (Mode A)",
+    "spacing_scale": "Relaxed - use p-6, p-8 for containers",
+    "container_max_width": "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8",
+    "border_radius": "rounded-md",
+    "z_index": {
+      "toast": 50,
+      "modal": 40,
+      "dropdown": 30,
+      "sticky_nav": 20
+    }
+  },
+  "components": {
+    "buttons": {
+      "default": "h-10 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+      "outline": "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
+      "ghost": "hover:bg-accent hover:text-accent-foreground",
+      "destructive": "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+    },
+    "cards": {
+      "style": "border bg-card text-card-foreground shadow-sm rounded-md",
+      "hover_effect": "hover:shadow-md transition-shadow duration-200"
+    },
+    "inputs": {
+      "style": "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+    }
+  },
+  "assets": {
+    "image_urls": {
+      "hero_main": "https://images.unsplash.com/photo-1736939666660-d4c776e0532c?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "hero_secondary": "https://images.unsplash.com/photo-1738750908048-14200459c3c9?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "empty_state_desk": "https://images.unsplash.com/photo-1770003354677-7c3b06d302e9?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "testimonial_1": "https://images.unsplash.com/photo-1602566356438-dd36d35e989c?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "testimonial_2": "https://images.unsplash.com/photo-1624377103868-c780d0fa2b4c?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "abstract_bg": "https://images.unsplash.com/photo-1655841439161-c2d145b6aaea?crop=entropy&cs=srgb&fm=jpg&q=85"
+    },
+    "icons": {
+      "library": "lucide-react",
+      "preferred_set": ["Mic", "Video", "Play", "Pause", "CheckCircle", "XCircle", "BarChart", "User", "Briefcase", "FileText"]
+    }
+  },
+  "motion": {
+    "library": "framer-motion",
+    "transitions": {
+      "default": { "type": "spring", "stiffness": 260, "damping": 20 },
+      "hover": { "duration": 0.2, "ease": "easeInOut" }
+    }
+  },
+  "accessibility": {
+    "contrast_check": "Ensure text-muted-foreground is readable against backgrounds",
+    "focus_states": "All interactive elements must have visible focus rings",
+    "aria_labels": "Required for all icon-only buttons (Record, Play, etc.)"
+  },
+  "specific_instructions_for_main_agent": [
+    "UPDATE /app/frontend/src/index.css to import Plus Jakarta Sans and JetBrains Mono from Google Fonts.",
+    "MODIFY /app/frontend/tailwind.config.js to set font families: sans: ['Plus Jakarta Sans', ...], mono: ['JetBrains Mono', ...]",
+    "OVERRIDE Shadcn radius: Set --radius to 0.3rem or 0.5rem in index.css (do not use 1rem/0.75rem). We want a sharper 'tactical' look.",
+    "DASHBOARD LAYOUT: Use the Bento Grid (Mode A) strategy. Do not just stack cards vertically.",
+    "INTERVIEW ROOM: Split screen. Left side = Question/Script (Scrollable). Right side = Video Feed (Sticky/Fixed).",
+    "VIDEO CONTROLS: Use a floating glassmorphism bar at the bottom of the video feed.",
+    "RECORDING STATE: When recording, show a pulsing red indicator and a real-time waveform if possible (or a simulated CSS animation).",
+    "AI FEEDBACK: Present feedback in a clean, structured list (Strength, Weakness, Suggestion) using distinctive icons/colors.",
+    "THEME TOGGLE: Place prominently in the nav bar. Default to Dark Mode if the user's system preference is unknown.",
+    "Use 'sonner' for all toast notifications.",
+    "All functional elements must have data-testid attributes."
+  ],
+  "universal_guidelines": [
+    "Avoid 'AI Slop' - generic centered layouts.",
+    "Use 2-3x more spacing than typical designs.",
+    "Every interaction needs micro-animations.",
+    "Never use generic AI emojis.",
+    "Dark colors look good when used independently without gradients.",
+    "Don't center align the app container."
+  ]
+}
