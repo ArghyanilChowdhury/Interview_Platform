@@ -16,6 +16,17 @@ import LiveInterview from "./pages/LiveInterview";
 import InterviewReview from "./pages/InterviewReview";
 import InterviewHistory from "./pages/InterviewHistory";
 import Profile from "./pages/Profile";
+import About from "./pages/About";
+import Careers from "./pages/Careers";
+import Blog from "./pages/Blog";
+import Press from "./pages/Press";
+import Contact from "./pages/Contact";
+import HelpCenter from "./pages/HelpCenter";
+import Donate from "./pages/Donate";
+import Feedback from "./pages/Feedback";
+import Privacy from "./pages/Privacy";
+import Terms from "./pages/Terms";
+import Cookies from "./pages/Cookies";
 
 function AppRouter() {
   const location = useLocation();
@@ -29,10 +40,13 @@ function AppRouter() {
   const hideNavbar = ['/', '/login', '/signup'].includes(location.pathname);
   // Live interview page has its own top bar
   const isLiveInterview = location.pathname.includes('/live');
+  // Public pages that should show navbar
+  const publicPages = ['/about', '/careers', '/blog', '/press', '/contact', '/help', '/donate', '/feedback', '/privacy', '/terms', '/cookies'];
+  const isPublicPage = publicPages.includes(location.pathname);
 
   return (
     <>
-      {!hideNavbar && !isLiveInterview && <Navbar />}
+      {(!hideNavbar && !isLiveInterview) && <Navbar />}
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
@@ -44,6 +58,17 @@ function AppRouter() {
         <Route path="/interview/:interviewId/review" element={<ProtectedRoute><InterviewReview /></ProtectedRoute>} />
         <Route path="/history" element={<ProtectedRoute><InterviewHistory /></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+        <Route path="/about" element={<About />} />
+        <Route path="/careers" element={<Careers />} />
+        <Route path="/blog" element={<Blog />} />
+        <Route path="/press" element={<Press />} />
+        <Route path="/contact" element={<Contact />} />
+        <Route path="/help" element={<HelpCenter />} />
+        <Route path="/donate" element={<Donate />} />
+        <Route path="/feedback" element={<Feedback />} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/terms" element={<Terms />} />
+        <Route path="/cookies" element={<Cookies />} />
       </Routes>
     </>
   );
