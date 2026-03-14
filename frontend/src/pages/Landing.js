@@ -1,7 +1,11 @@
 import { Link } from 'react-router-dom';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
-import { Video, Mic, BarChart3, FileText, ArrowRight, CheckCircle, Briefcase } from 'lucide-react';
+import { Separator } from '../components/ui/separator';
+import {
+  Video, Mic, BarChart3, FileText, ArrowRight, CheckCircle, Briefcase,
+  Mail, Heart, Users, Info, Phone, Globe, Github, Twitter, Linkedin
+} from 'lucide-react';
 
 const features = [
   {
@@ -70,15 +74,15 @@ export default function Landing() {
               </div>
               <div className="flex items-center gap-6 pt-2 text-sm text-muted-foreground">
                 <span className="flex items-center gap-1.5"><CheckCircle className="w-4 h-4 text-emerald-500" /> Free to use</span>
-                <span className="flex items-center gap-1.5"><CheckCircle className="w-4 h-4 text-emerald-500" /> No credit card</span>
                 <span className="flex items-center gap-1.5"><CheckCircle className="w-4 h-4 text-emerald-500" /> AI powered</span>
+                <span className="flex items-center gap-1.5"><CheckCircle className="w-4 h-4 text-emerald-500" /> Instant feedback</span>
               </div>
             </div>
             <div className="hidden lg:block relative">
               <div className="relative rounded-md overflow-hidden shadow-2xl border">
                 <img
-                  src="https://images.unsplash.com/photo-1736939666660-d4c776e0532c?crop=entropy&cs=srgb&fm=jpg&q=85&w=800"
-                  alt="Interview preparation"
+                  src="https://images.unsplash.com/photo-1698047681452-08eba22d0c64?crop=entropy&cs=srgb&fm=jpg&q=85&w=800"
+                  alt="Professional interview preparation"
                   className="w-full h-[420px] object-cover"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
@@ -151,16 +155,79 @@ export default function Landing() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t py-8">
+      <footer className="border-t bg-card" data-testid="footer">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-md bg-primary flex items-center justify-center">
-                <Video className="w-3 h-3 text-primary-foreground" />
+          {/* Footer Top */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 py-12">
+            {/* Brand */}
+            <div className="col-span-2 md:col-span-1 space-y-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center">
+                  <Video className="w-4 h-4 text-primary-foreground" />
+                </div>
+                <span className="text-base font-bold font-heading">InterviewMaster</span>
               </div>
-              <span className="text-sm font-semibold">InterviewMaster</span>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                AI-powered interview practice platform helping candidates land their dream jobs.
+              </p>
+              <div className="flex items-center gap-3">
+                <a href="#" className="w-8 h-8 rounded-md bg-muted flex items-center justify-center hover:bg-primary/10 transition-colors" data-testid="footer-twitter" aria-label="Twitter">
+                  <Twitter className="w-4 h-4 text-muted-foreground" />
+                </a>
+                <a href="#" className="w-8 h-8 rounded-md bg-muted flex items-center justify-center hover:bg-primary/10 transition-colors" data-testid="footer-linkedin" aria-label="LinkedIn">
+                  <Linkedin className="w-4 h-4 text-muted-foreground" />
+                </a>
+                <a href="#" className="w-8 h-8 rounded-md bg-muted flex items-center justify-center hover:bg-primary/10 transition-colors" data-testid="footer-github" aria-label="GitHub">
+                  <Github className="w-4 h-4 text-muted-foreground" />
+                </a>
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground">Built for interview success</p>
+
+            {/* Company */}
+            <div className="space-y-4">
+              <h4 className="text-sm font-semibold font-heading">Company</h4>
+              <ul className="space-y-2.5">
+                <li><a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors" data-testid="footer-about">About Us</a></li>
+                <li><a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors" data-testid="footer-careers">Careers</a></li>
+                <li><a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors" data-testid="footer-blog">Blog</a></li>
+                <li><a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors" data-testid="footer-press">Press</a></li>
+              </ul>
+            </div>
+
+            {/* Support */}
+            <div className="space-y-4">
+              <h4 className="text-sm font-semibold font-heading">Support</h4>
+              <ul className="space-y-2.5">
+                <li><a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors" data-testid="footer-contact">Contact Us</a></li>
+                <li><a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors" data-testid="footer-help">Help Center</a></li>
+                <li><a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors" data-testid="footer-donate">Donate Us</a></li>
+                <li><a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors" data-testid="footer-feedback">Feedback</a></li>
+              </ul>
+            </div>
+
+            {/* Legal */}
+            <div className="space-y-4">
+              <h4 className="text-sm font-semibold font-heading">Legal</h4>
+              <ul className="space-y-2.5">
+                <li><a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors" data-testid="footer-privacy">Privacy Policy</a></li>
+                <li><a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors" data-testid="footer-terms">Terms of Service</a></li>
+                <li><a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors" data-testid="footer-cookies">Cookie Policy</a></li>
+              </ul>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Footer Bottom */}
+          <div className="flex flex-col sm:flex-row items-center justify-between py-6 gap-4">
+            <p className="text-xs text-muted-foreground">
+              &copy; {new Date().getFullYear()} InterviewMaster. All rights reserved.
+            </p>
+            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+              <a href="mailto:support@interviewmaster.com" className="flex items-center gap-1.5 hover:text-foreground transition-colors" data-testid="footer-email">
+                <Mail className="w-3 h-3" /> support@interviewmaster.com
+              </a>
+            </div>
           </div>
         </div>
       </footer>
