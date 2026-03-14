@@ -60,6 +60,8 @@ class UserLogin(BaseModel):
 class InterviewCreate(BaseModel):
     type: str
     role: Optional[str] = None
+    experience_level: Optional[str] = None
+    skills: Optional[List[str]] = None
 
 class ResponseSave(BaseModel):
     question_index: int
@@ -279,13 +281,19 @@ async def logout(request: Request, response: Response):
 @api_router.post("/interviews/start")
 async def start_interview(data: InterviewCreate, user: dict = Depends(get_current_user)):
     interview_id = f"int_{uuid.uuid4().hex[:12]}"
-    questions = await generate_questions(data.type, data.role)
+    questions = await generate_questions(
+        data.type, data.role,
+        experience_level=data.experience_level,
+        skills=data.skills
+    )
 
     interview_doc = {
         "interview_id": interview_id,
         "user_id": user["user_id"],
         "type": data.type,
         "role": data.role,
+        "experience_level": data.experience_level,
+        "skills": data.skills or [],
         "questions": questions,
         "responses": [],
         "status": "in_progress",
@@ -299,6 +307,8 @@ async def start_interview(data: InterviewCreate, user: dict = Depends(get_curren
         "interview_id": interview_id,
         "type": data.type,
         "role": data.role,
+        "experience_level": data.experience_level,
+        "skills": data.skills or [],
         "questions": questions,
         "status": "in_progress"
     }
@@ -478,7 +488,7 @@ def parse_resume(file_path: str, file_ext: str) -> str:
 
 # ============ AI SERVICE ============
 
-async def generate_questions(interview_type: str, role: str = None, resume_text: str = None) -> list:
+async def generate_questions(interview_type: str, role: str = None, resume_text: str = None, experience_level: str = None, skills: list = None) -> list:
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage
 
@@ -493,7 +503,9 @@ async def generate_questions(interview_type: str, role: str = None, resume_text:
         ).with_model("gemini", "gemini-3-flash-preview")
 
         if interview_type == "role" and role:
-            prompt = f"Generate 7 interview questions for a {role} position. Mix technical and behavioral questions. Return as JSON array of strings only."
+            level_str = f" The candidate is at {experience_level} level." if experience_level else ""
+            skills_str = f" Focus on these specific skills: {', '.join(skills)}." if skills and len(skills) > 0 else ""
+            prompt = f"Generate 7 interview questions for a {role} position.{level_str}{skills_str} Mix technical and behavioral questions appropriate for the candidate's experience level. Return as JSON array of strings only."
         elif interview_type == "resume" and resume_text:
             prompt = f"Based on this resume, generate 7 personalized interview questions targeting the candidate's specific skills, projects, and experience:\n\n{resume_text[:3000]}\n\nReturn as JSON array of strings only."
         else:
