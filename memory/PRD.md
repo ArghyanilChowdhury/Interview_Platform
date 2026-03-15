@@ -1,69 +1,46 @@
-# InterviewMaster - Product Requirements Document
+# Interview Platform - PRD
 
 ## Problem Statement
-Build a modern, responsive Interview Practice Platform where candidates can sign up, log in, practice mock interviews (role-based and resume-based), record answers via webcam/microphone, and review recordings with AI-generated feedback.
+Build a modern, responsive Interview Practice Platform where users can sign up, log in, practice mock interviews, and review their recorded answers.
 
-## Architecture
-- **Frontend**: React.js + Tailwind CSS + Shadcn UI
-- **Backend**: FastAPI (Python) 
+## Tech Stack
+- **Frontend**: React.js, Tailwind CSS, Shadcn UI
+- **Backend**: FastAPI, Motor (async MongoDB)
 - **Database**: MongoDB
-- **AI**: Gemini 3 Flash via Emergent LLM key
-- **Auth**: JWT (email/password) + Emergent Google OAuth
-- **Speech-to-Text**: Browser Web Speech API
-- **Recording**: Browser MediaRecorder API
+- **AI**: Gemini 3 Flash via Emergent LLM Key
+- **Auth**: JWT + Emergent-managed Google OAuth
+- **Media**: Browser MediaRecorder API + Web Speech API
 
-## User Personas
-1. **Job Seeker** - Wants to practice technical/behavioral interviews
-2. **Career Changer** - Needs role-specific interview practice
-3. **Student** - Preparing for first job interviews
+## Core Requirements
+1. Authentication (JWT + Google OAuth)
+2. Dashboard with stats, interview start, history
+3. Role-Based Interviews (select role, level, skills, configure question count/time)
+4. Resume-Based Interviews (upload PDF/DOCX)
+5. Live Interview Flow (one question at a time, video/audio recording, live transcription, countdown timer, auto-submit)
+6. Recording & Review (save recordings, review with transcripts, AI feedback)
+7. Modern responsive UI with dark/light mode
 
-## Core Requirements (Static)
-- User authentication (signup, login, logout)
-- Role-based mock interviews (6 roles)
-- Resume-based mock interviews (PDF/DOCX upload)
-- AI-generated interview questions (Gemini 3 Flash)
-- Webcam/mic recording per question
-- Speech-to-text transcription (Web Speech API)
-- AI feedback on each answer
-- Interview review with video playback
-- Interview history
-- Profile management
-- Dark/Light mode toggle
+## What's Implemented (as of March 15, 2026)
+- Full auth system (JWT + Google OAuth)
+- Landing page with hero section and footer with 11 static pages
+- Dashboard with bento grid layout, real stats, action menus
+- 4-step Role Setup wizard (Role → Level → Skills → Configure)
+- Resume Setup page with file upload
+- Live Interview page with camera/mic, recording, countdown timer, auto-submit, manual stop
+- Interview Review page with video playback, transcripts, AI feedback (markdown stripped)
+- Interview History page with filter and action menus (Delete, Abort, Send Feedback)
+- Backend: All CRUD endpoints, AI question generation, AI feedback/summary, recording upload/serve
+- Configurable interviews: num_questions (3-20), time_per_question
+- strip_markdown on both backend and frontend
+- Profile page
 
-## What's Been Implemented (March 10, 2026)
-- Full authentication system (JWT + Google OAuth)
-- Landing page with hero, features, CTA
-- Candidate dashboard with Bento grid layout
-- Role-based interview setup (6 roles)
-- Resume upload + AI parsing interview setup
-- Live interview page with split view (question + video)
-- Recording with MediaRecorder + Web Speech API transcription
-- Interview completion with AI feedback generation
-- Interview review page with video playback + AI feedback
-- Interview history with filtering
-- Profile page with stats and edit
-- Dark/Light mode toggle
-- Responsive design with Plus Jakarta Sans typography
+## Mocked Features
+- "Send Feedback to Email" button shows toast only (no backend email service)
+- Static footer pages (About, Blog, etc.) have placeholder content
 
-## Prioritized Backlog
-### P0 (Done)
-- Auth, Dashboard, Role/Resume interviews, Recording, Review, History
-
-### P1 (Next Phase)
-- Answer confidence/communication rating (numeric scores)
-- Timer per answer with configurable time limits
-- Progress bar improvements during interview
-- Better error handling for media permissions
-
-### P2 (Future)
-- Admin dashboard for analytics
-- Interview sharing/export functionality
-- Multiple language support
-- Practice streaks and gamification
-- Comparison between interview attempts
-
-## Next Tasks
-1. Add numeric confidence/communication ratings to AI feedback
-2. Add configurable timer limits per question
-3. Improve mobile experience for live interview page
-4. Add interview session export (PDF report)
+## Backlog
+- **P1**: Implement "Send Feedback to Email" backend (needs email service integration)
+- **P1**: Address speech-to-text accuracy (browser Web Speech API limitations)
+- **P2**: AI-generated feedback improvements
+- **P2**: Rating system for confidence/communication
+- **P3**: Populate static footer pages with real content
