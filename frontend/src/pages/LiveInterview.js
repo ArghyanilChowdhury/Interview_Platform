@@ -114,24 +114,31 @@ export default function LiveInterview() {
     window.speechSynthesis.speak(utterance);
   }, []);
 
+  const [voicesReady, setVoicesReady] = useState(false);
+
   // Load voices (some browsers load them async)
   useEffect(() => {
-    const loadVoices = () => window.speechSynthesis.getVoices();
-    loadVoices();
+    const checkVoices = () => {
+      const v = window.speechSynthesis.getVoices();
+      if (v.length > 0) setVoicesReady(true);
+    };
+    checkVoices();
     if (window.speechSynthesis.onvoiceschanged !== undefined) {
-      window.speechSynthesis.onvoiceschanged = loadVoices;
+      window.speechSynthesis.onvoiceschanged = checkVoices;
     }
+    // Fallback: some browsers don't fire onvoiceschanged
+    const fallback = setTimeout(() => setVoicesReady(true), 1000);
+    return () => clearTimeout(fallback);
   }, []);
 
-  // Speak when question changes
+  // Speak when question changes OR when voices finish loading (fixes first question)
   useEffect(() => {
-    if (interview && interview.questions && interview.questions[currentIndex] && lastSpokenIndexRef.current !== currentIndex) {
-      lastSpokenIndexRef.current = currentIndex;
-      // Short delay so the UI updates first
-      const t = setTimeout(() => speakQuestion(interview.questions[currentIndex]), 400);
-      return () => clearTimeout(t);
-    }
-  }, [currentIndex, interview, speakQuestion]);
+    if (!voicesReady || !interview?.questions?.[currentIndex]) return;
+    if (lastSpokenIndexRef.current === currentIndex) return;
+    lastSpokenIndexRef.current = currentIndex;
+    const t = setTimeout(() => speakQuestion(interview.questions[currentIndex]), 300);
+    return () => clearTimeout(t);
+  }, [currentIndex, interview, speakQuestion, voicesReady]);
 
   const toggleCamera = () => { if (streamRef.current) { const t = streamRef.current.getVideoTracks()[0]; if (t) { t.enabled = !t.enabled; setCameraOn(t.enabled); } } };
   const toggleMic = () => { if (streamRef.current) { const t = streamRef.current.getAudioTracks()[0]; if (t) { t.enabled = !t.enabled; setMicOn(t.enabled); } } };
