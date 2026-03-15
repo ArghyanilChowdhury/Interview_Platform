@@ -8,19 +8,9 @@ Build a modern, responsive Interview Practice Platform where users can sign up, 
 - **Backend**: FastAPI, Motor (async MongoDB)
 - **Database**: MongoDB
 - **AI**: Gemini 3 Flash via Emergent LLM Key (question generation, feedback)
-- **Transcription**: OpenAI Whisper via Emergent LLM Key (accurate speech-to-text)
+- **Transcription**: OpenAI Whisper via Emergent LLM Key (accurate speech-to-text on backend)
 - **Auth**: JWT + Emergent-managed Google OAuth
-- **Media**: Browser MediaRecorder API + Web Speech API (live feedback) + Whisper (saved transcript)
-
-## Core Requirements
-1. Authentication (JWT + Google OAuth)
-2. Dashboard with stats, interview start, history
-3. Role-Based Interviews (4-step wizard: role → level → skills → configure)
-4. Resume-Based Interviews (2-step wizard: upload → configure)
-5. Live Interview Flow (recording, countdown timer, auto-submit, auto-navigate to next question)
-6. Accurate Transcription via Whisper (replaces browser-only speech-to-text)
-7. Recording & Review (video playback, transcripts, AI feedback with markdown stripped)
-8. Modern responsive UI with dark/light mode
+- **Media**: Browser MediaRecorder API for video/audio recording
 
 ## What's Implemented (as of March 15, 2026)
 - Full auth system (JWT + Google OAuth) with back buttons on Login/Signup
@@ -28,12 +18,16 @@ Build a modern, responsive Interview Practice Platform where users can sign up, 
 - Dashboard with bento grid layout, real stats, action menus (Delete, Abort, Send Feedback)
 - 4-step Role Setup wizard (Role → Level → Skills → Configure)
 - 2-step Resume Setup wizard (Upload → Configure) with num_questions and time_per_question
-- Live Interview page: camera/mic, recording, countdown timer, auto-submit, manual Stop & Submit, auto-navigate to next question
+- **Live Interview page redesigned as video call**:
+  - AI Interviewer panel (Sarah Mitchell) with professional image on left
+  - User's camera feed on right
+  - Question shown below in chat-style card from the interviewer
+  - Live transcript removed entirely (Whisper handles transcription on backend)
+  - Countdown timer, auto-submit, manual Stop & Submit, auto-navigate to next question
 - OpenAI Whisper integration for accurate transcription on recording upload
 - Interview Review page with video playback, transcripts, AI feedback (markdown stripped)
 - Interview History page with filter and action menus
-- Profile page
-- Backend: All CRUD endpoints, AI question generation, AI feedback/summary, Whisper transcription
+- Profile page, 7 static footer pages
 
 ## Mocked Features
 - "Send Feedback to Email" button shows toast only (no backend email service)
