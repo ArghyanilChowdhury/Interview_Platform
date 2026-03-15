@@ -324,6 +324,8 @@ async def start_interview(data: InterviewCreate, user: dict = Depends(get_curren
 @api_router.post("/interviews/start-resume")
 async def start_resume_interview(
     file: UploadFile = File(...),
+    num_questions: int = Form(7),
+    time_per_question: int = Form(120),
     user: dict = Depends(get_current_user)
 ):
     file_ext = Path(file.filename).suffix.lower()
@@ -337,8 +339,9 @@ async def start_resume_interview(
     async with aiofiles.open(str(resume_path), "wb") as f:
         await f.write(content)
 
+    num_q = max(3, min(20, num_questions))
     resume_text = parse_resume(str(resume_path), file_ext)
-    questions = await generate_questions("resume", resume_text=resume_text, num_questions=7)
+    questions = await generate_questions("resume", resume_text=resume_text, num_questions=num_q)
 
     interview_id = f"int_{uuid.uuid4().hex[:12]}"
     interview_doc = {
@@ -348,8 +351,8 @@ async def start_resume_interview(
         "role": None,
         "resume_filename": resume_filename,
         "resume_text": resume_text[:2000],
-        "num_questions": 7,
-        "time_per_question": 120,
+        "num_questions": num_q,
+        "time_per_question": time_per_question,
         "questions": questions,
         "responses": [],
         "status": "in_progress",
@@ -362,6 +365,8 @@ async def start_resume_interview(
     return {
         "interview_id": interview_id,
         "type": "resume",
+        "num_questions": num_q,
+        "time_per_question": time_per_question,
         "questions": questions,
         "status": "in_progress"
     }
@@ -510,7 +515,27 @@ async def upload_recording(
         await f.write(content)
 
     recording_url = f"/api/recordings/{filename}"
-    return {"recording_path": recording_url, "filename": filename}
+
+    # Transcribe with Whisper for accurate transcript
+    whisper_transcript = None
+    try:
+        from emergentintegrations.llm.openai import OpenAISpeechToText
+        api_key = os.environ.get('EMERGENT_LLM_KEY')
+        if api_key and len(content) > 0:
+            stt = OpenAISpeechToText(api_key=api_key)
+            with open(str(file_path), "rb") as audio_file:
+                response = await stt.transcribe(
+                    file=audio_file,
+                    model="whisper-1",
+                    language="en",
+                    response_format="json"
+                )
+                whisper_transcript = response.text if response and response.text else None
+                logger.info(f"Whisper transcription successful for {filename}")
+    except Exception as e:
+        logger.error(f"Whisper transcription error: {e}")
+
+    return {"recording_path": recording_url, "filename": filename, "transcript": whisper_transcript}
 
 @api_router.get("/recordings/{filename}")
 async def serve_recording(filename: str):

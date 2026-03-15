@@ -7,7 +7,7 @@ import { Label } from '../components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Separator } from '../components/ui/separator';
 import { toast } from 'sonner';
-import { Video, Mail, Lock, Loader2 } from 'lucide-react';
+import { Video, Mail, Lock, Loader2, ArrowLeft } from 'lucide-react';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -38,7 +38,10 @@ export default function Login() {
     <div className="min-h-screen flex" data-testid="login-page">
       {/* Left panel - decorative */}
       <div className="hidden lg:flex lg:w-1/2 bg-primary relative items-center justify-center">
-        <div className="absolute inset-0 opacity-10">
+        <Button variant="ghost" size="icon" className="absolute top-6 left-6 text-white/80 hover:text-white hover:bg-white/10" onClick={() => navigate('/')} data-testid="login-back-btn">
+          <ArrowLeft className="w-5 h-5" />
+        </Button>
+        <div className="absolute inset-0 opacity-10 pointer-events-none">
           <div className="absolute top-20 left-20 w-72 h-72 bg-white rounded-full" />
           <div className="absolute bottom-20 right-20 w-48 h-48 bg-white rounded-full" />
         </div>
@@ -57,6 +60,9 @@ export default function Login() {
       <div className="flex-1 flex items-center justify-center p-6 sm:p-12">
         <div className="w-full max-w-sm">
           <div className="lg:hidden flex items-center gap-2.5 mb-8">
+            <Button variant="ghost" size="icon" className="shrink-0" onClick={() => navigate('/')} data-testid="login-back-btn-mobile">
+              <ArrowLeft className="w-4 h-4" />
+            </Button>
             <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center">
               <Video className="w-4 h-4 text-primary-foreground" />
             </div>

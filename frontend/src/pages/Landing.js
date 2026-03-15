@@ -188,9 +188,6 @@ export default function Landing() {
               <h4 className="text-sm font-semibold font-heading">Company</h4>
               <ul className="space-y-2.5">
                 <li><Link to="/about" className="text-sm text-muted-foreground hover:text-foreground transition-colors" data-testid="footer-about">About Us</Link></li>
-                <li><Link to="/careers" className="text-sm text-muted-foreground hover:text-foreground transition-colors" data-testid="footer-careers">Careers</Link></li>
-                <li><Link to="/blog" className="text-sm text-muted-foreground hover:text-foreground transition-colors" data-testid="footer-blog">Blog</Link></li>
-                <li><Link to="/press" className="text-sm text-muted-foreground hover:text-foreground transition-colors" data-testid="footer-press">Press</Link></li>
               </ul>
             </div>
 
@@ -199,7 +196,6 @@ export default function Landing() {
               <h4 className="text-sm font-semibold font-heading">Support</h4>
               <ul className="space-y-2.5">
                 <li><Link to="/contact" className="text-sm text-muted-foreground hover:text-foreground transition-colors" data-testid="footer-contact">Contact Us</Link></li>
-                <li><Link to="/help" className="text-sm text-muted-foreground hover:text-foreground transition-colors" data-testid="footer-help">Help Center</Link></li>
                 <li><Link to="/donate" className="text-sm text-muted-foreground hover:text-foreground transition-colors" data-testid="footer-donate">Donate Us</Link></li>
                 <li><Link to="/feedback" className="text-sm text-muted-foreground hover:text-foreground transition-colors" data-testid="footer-feedback">Feedback</Link></li>
               </ul>

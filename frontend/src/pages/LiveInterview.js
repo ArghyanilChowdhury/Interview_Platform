@@ -115,9 +115,11 @@ export default function LiveInterview() {
     if (isAutoStop) toast.info('Time\'s up! Auto-submitting your answer...');
 
     setSavingResponse(true);
+    const savedIndex = currentIndex;
     const elapsed = Math.floor((Date.now() - recordStartTimeRef.current) / 1000);
     try {
       let recordingPath = null;
+      let whisperTranscript = null;
       if (chunksRef.current.length > 0) {
         const blob = new Blob(chunksRef.current, { type: 'video/webm' });
         const formData = new FormData();
@@ -126,19 +128,49 @@ export default function LiveInterview() {
         formData.append('question_index', currentIndex.toString());
         const uploadRes = await axios.post(`${API}/recordings/upload`, formData, { headers: { ...getAuthHeaders(), 'Content-Type': 'multipart/form-data' }, withCredentials: true });
         recordingPath = uploadRes.data.recording_path;
+        whisperTranscript = uploadRes.data.transcript;
       }
+      const finalTranscript = whisperTranscript || transcriptRef.current || transcript || 'No transcript available';
       await axios.post(`${API}/interviews/${interviewId}/responses`, {
         question_index: currentIndex,
-        transcript: transcriptRef.current || transcript || 'No transcript available',
+        transcript: finalTranscript,
         recording_path: recordingPath,
         duration: elapsed
       }, { headers: getAuthHeaders(), withCredentials: true });
 
-      setAnsweredQuestions(prev => new Set([...prev, currentIndex]));
+      setAnsweredQuestions(prev => {
+        const next = new Set([...prev, savedIndex]);
+        return next;
+      });
       toast.success('Response saved!');
+
+      // Auto-navigate to next unanswered question
+      if (interview) {
+        const totalQ = interview.questions.length;
+        setAnsweredQuestions(prev => {
+          const answered = new Set([...prev, savedIndex]);
+          // Find next unanswered
+          let nextIdx = -1;
+          for (let i = savedIndex + 1; i < totalQ; i++) {
+            if (!answered.has(i)) { nextIdx = i; break; }
+          }
+          if (nextIdx === -1) {
+            // Check earlier questions
+            for (let i = 0; i < savedIndex; i++) {
+              if (!answered.has(i)) { nextIdx = i; break; }
+            }
+          }
+          if (nextIdx >= 0) {
+            setCurrentIndex(nextIdx);
+            setTranscript('');
+            setCountdown(0);
+          }
+          return answered;
+        });
+      }
     } catch { toast.error('Failed to save response'); }
     finally { setSavingResponse(false); }
-  }, [currentIndex, interviewId, getAuthHeaders, transcript]);
+  }, [currentIndex, interviewId, getAuthHeaders, transcript, interview]);
 
   const startRecording = () => {
     if (!streamRef.current || !mediaReady) { toast.error('Camera/mic not available. Click "Enable Camera" to retry.'); return; }
