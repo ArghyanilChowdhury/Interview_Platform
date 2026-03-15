@@ -62,6 +62,8 @@ class InterviewCreate(BaseModel):
     role: Optional[str] = None
     experience_level: Optional[str] = None
     skills: Optional[List[str]] = None
+    num_questions: Optional[int] = 7
+    time_per_question: Optional[int] = 120
 
 class ResponseSave(BaseModel):
     question_index: int
@@ -281,10 +283,12 @@ async def logout(request: Request, response: Response):
 @api_router.post("/interviews/start")
 async def start_interview(data: InterviewCreate, user: dict = Depends(get_current_user)):
     interview_id = f"int_{uuid.uuid4().hex[:12]}"
+    num_q = max(3, min(20, data.num_questions or 7))
     questions = await generate_questions(
         data.type, data.role,
         experience_level=data.experience_level,
-        skills=data.skills
+        skills=data.skills,
+        num_questions=num_q
     )
 
     interview_doc = {
@@ -294,6 +298,8 @@ async def start_interview(data: InterviewCreate, user: dict = Depends(get_curren
         "role": data.role,
         "experience_level": data.experience_level,
         "skills": data.skills or [],
+        "num_questions": num_q,
+        "time_per_question": data.time_per_question or 120,
         "questions": questions,
         "responses": [],
         "status": "in_progress",
@@ -309,6 +315,8 @@ async def start_interview(data: InterviewCreate, user: dict = Depends(get_curren
         "role": data.role,
         "experience_level": data.experience_level,
         "skills": data.skills or [],
+        "num_questions": num_q,
+        "time_per_question": data.time_per_question or 120,
         "questions": questions,
         "status": "in_progress"
     }
@@ -330,7 +338,7 @@ async def start_resume_interview(
         await f.write(content)
 
     resume_text = parse_resume(str(resume_path), file_ext)
-    questions = await generate_questions("resume", resume_text=resume_text)
+    questions = await generate_questions("resume", resume_text=resume_text, num_questions=7)
 
     interview_id = f"int_{uuid.uuid4().hex[:12]}"
     interview_doc = {
@@ -340,6 +348,8 @@ async def start_resume_interview(
         "role": None,
         "resume_filename": resume_filename,
         "resume_text": resume_text[:2000],
+        "num_questions": 7,
+        "time_per_question": 120,
         "questions": questions,
         "responses": [],
         "status": "in_progress",
@@ -418,9 +428,9 @@ async def complete_interview(interview_id: str, user: dict = Depends(get_current
         idx = resp["question_index"]
         if idx < len(questions) and resp.get("transcript"):
             feedback = await generate_feedback(questions[idx], resp["transcript"])
-            resp["feedback"] = feedback
+            resp["feedback"] = strip_markdown(feedback)
 
-    summary = await generate_summary(questions, responses, interview.get("role", "General"))
+    summary = strip_markdown(await generate_summary(questions, responses, interview.get("role", "General")))
 
     await db.interviews.update_one(
         {"interview_id": interview_id},
@@ -439,6 +449,49 @@ async def complete_interview(interview_id: str, user: dict = Depends(get_current
         {"_id": 0}
     )
     return updated
+
+@api_router.delete("/interviews/{interview_id}")
+async def delete_interview(interview_id: str, user: dict = Depends(get_current_user)):
+    result = await db.interviews.delete_one(
+        {"interview_id": interview_id, "user_id": user["user_id"]}
+    )
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Interview not found")
+    return {"message": "Interview deleted"}
+
+@api_router.post("/interviews/{interview_id}/abort")
+async def abort_interview(interview_id: str, user: dict = Depends(get_current_user)):
+    interview = await db.interviews.find_one(
+        {"interview_id": interview_id, "user_id": user["user_id"]},
+        {"_id": 0}
+    )
+    if not interview:
+        raise HTTPException(status_code=404, detail="Interview not found")
+    if interview["status"] != "in_progress":
+        raise HTTPException(status_code=400, detail="Interview is not in progress")
+
+    await db.interviews.update_one(
+        {"interview_id": interview_id},
+        {"$set": {"status": "aborted", "completed_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    return {"message": "Interview aborted"}
+
+import re
+
+def strip_markdown(text: str) -> str:
+    if not text:
+        return text
+    text = re.sub(r'#{1,6}\s*', '', text)
+    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
+    text = re.sub(r'\*(.+?)\*', r'\1', text)
+    text = re.sub(r'__(.+?)__', r'\1', text)
+    text = re.sub(r'_(.+?)_', r'\1', text)
+    text = re.sub(r'`(.+?)`', r'\1', text)
+    text = re.sub(r'^\s*[-*+]\s+', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^\s*\d+\.\s+', '', text, flags=re.MULTILINE)
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip()
+
 
 # ============ RECORDING ROUTES ============
 
@@ -488,13 +541,14 @@ def parse_resume(file_path: str, file_ext: str) -> str:
 
 # ============ AI SERVICE ============
 
-async def generate_questions(interview_type: str, role: str = None, resume_text: str = None, experience_level: str = None, skills: list = None) -> list:
+async def generate_questions(interview_type: str, role: str = None, resume_text: str = None, experience_level: str = None, skills: list = None, num_questions: int = 7) -> list:
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage
 
         api_key = os.environ.get('EMERGENT_LLM_KEY')
         if not api_key:
-            return get_fallback_questions(role or "general")
+            fallback = get_fallback_questions(role or "general")
+            return fallback[:num_questions]
 
         chat = LlmChat(
             api_key=api_key,
@@ -505,11 +559,11 @@ async def generate_questions(interview_type: str, role: str = None, resume_text:
         if interview_type == "role" and role:
             level_str = f" The candidate is at {experience_level} level." if experience_level else ""
             skills_str = f" Focus on these specific skills: {', '.join(skills)}." if skills and len(skills) > 0 else ""
-            prompt = f"Generate 7 interview questions for a {role} position.{level_str}{skills_str} Mix technical and behavioral questions appropriate for the candidate's experience level. Return as JSON array of strings only."
+            prompt = f"Generate exactly {num_questions} interview questions for a {role} position.{level_str}{skills_str} Mix technical and behavioral questions appropriate for the candidate's experience level. Return as JSON array of strings only."
         elif interview_type == "resume" and resume_text:
-            prompt = f"Based on this resume, generate 7 personalized interview questions targeting the candidate's specific skills, projects, and experience:\n\n{resume_text[:3000]}\n\nReturn as JSON array of strings only."
+            prompt = f"Based on this resume, generate exactly {num_questions} personalized interview questions targeting the candidate's specific skills, projects, and experience:\n\n{resume_text[:3000]}\n\nReturn as JSON array of strings only."
         else:
-            prompt = "Generate 7 general professional interview questions. Return as JSON array of strings only."
+            prompt = f"Generate exactly {num_questions} general professional interview questions. Return as JSON array of strings only."
 
         msg = UserMessage(text=prompt)
         response_text = await chat.send_message(msg)
@@ -521,14 +575,14 @@ async def generate_questions(interview_type: str, role: str = None, resume_text:
                 cleaned = "\n".join(lines[1:-1])
             questions = json.loads(cleaned)
             if isinstance(questions, list) and len(questions) > 0:
-                return [str(q) for q in questions[:7]]
+                return [str(q) for q in questions[:num_questions]]
         except json.JSONDecodeError:
             pass
 
-        return get_fallback_questions(role or "general")
+        return get_fallback_questions(role or "general")[:num_questions]
     except Exception as e:
         logger.error(f"AI question generation error: {e}")
-        return get_fallback_questions(role or "general")
+        return get_fallback_questions(role or "general")[:num_questions]
 
 async def generate_feedback(question: str, answer: str) -> str:
     try:
@@ -541,7 +595,7 @@ async def generate_feedback(question: str, answer: str) -> str:
         chat = LlmChat(
             api_key=api_key,
             session_id=f"feedback_{uuid.uuid4().hex[:8]}",
-            system_message="You are an expert interview coach. Provide brief, constructive feedback on interview answers. Keep feedback to 3-4 sentences max."
+            system_message="You are an expert interview coach. Provide brief, constructive feedback on interview answers. Keep feedback to 3-4 sentences max. Do NOT use any markdown formatting like **, ##, *, or bullet points. Write in plain sentences only."
         ).with_model("gemini", "gemini-3-flash-preview")
 
         msg = UserMessage(text=f"Question: {question}\n\nCandidate's Answer: {answer}\n\nProvide brief constructive feedback covering: content quality, communication clarity, and one improvement suggestion.")
@@ -570,7 +624,7 @@ async def generate_summary(questions: list, responses: list, role: str) -> str:
         chat = LlmChat(
             api_key=api_key,
             session_id=f"summary_{uuid.uuid4().hex[:8]}",
-            system_message="You are an expert interview coach. Provide a brief interview performance summary."
+            system_message="You are an expert interview coach. Provide a brief interview performance summary. Do NOT use any markdown formatting like **, ##, *, bullet points, or special symbols. Write in plain sentences only."
         ).with_model("gemini", "gemini-3-flash-preview")
 
         msg = UserMessage(text=f"Role: {role}\n\nInterview Q&A:\n\n{qa_text}\n\nProvide a brief performance summary (4-5 sentences) covering overall performance, strengths, areas for improvement, and a confidence rating out of 10.")

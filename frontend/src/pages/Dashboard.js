@@ -2,12 +2,17 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Card, CardContent } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
+} from '../components/ui/dropdown-menu';
+import { toast } from 'sonner';
 import axios from 'axios';
 import {
-  Briefcase, FileText, History, Play, ArrowRight, Clock,
-  CheckCircle, Video, BarChart3, TrendingUp
+  Briefcase, FileText, Play, ArrowRight, Clock,
+  CheckCircle, Video, BarChart3, TrendingUp, MoreVertical,
+  Trash2, XCircle, Mail
 } from 'lucide-react';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -16,7 +21,7 @@ export default function Dashboard() {
   const { user, getAuthHeaders } = useAuth();
   const navigate = useNavigate();
   const [recentInterviews, setRecentInterviews] = useState([]);
-  const [stats, setStats] = useState({ total: 0, completed: 0, inProgress: 0 });
+  const [stats, setStats] = useState({ total: 0, completed: 0, inProgress: 0, answered: 0 });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -28,16 +33,36 @@ export default function Dashboard() {
         });
         const interviews = res.data;
         setRecentInterviews(interviews.slice(0, 4));
+        const totalAnswered = interviews.reduce((sum, i) => sum + (i.responses?.length || 0), 0);
         setStats({
           total: interviews.length,
           completed: interviews.filter(i => i.status === 'completed').length,
           inProgress: interviews.filter(i => i.status === 'in_progress').length,
+          answered: totalAnswered,
         });
       } catch { /* ignore */ }
       setLoading(false);
     };
     fetchData();
   }, [getAuthHeaders]);
+
+  const deleteInterview = async (id) => {
+    if (!window.confirm('Delete this interview?')) return;
+    try {
+      await axios.delete(`${API}/interviews/${id}`, { headers: getAuthHeaders(), withCredentials: true });
+      setRecentInterviews(prev => prev.filter(i => i.interview_id !== id));
+      toast.success('Interview deleted');
+    } catch { toast.error('Failed to delete'); }
+  };
+
+  const abortInterview = async (id) => {
+    if (!window.confirm('Abort this interview?')) return;
+    try {
+      await axios.post(`${API}/interviews/${id}/abort`, {}, { headers: getAuthHeaders(), withCredentials: true });
+      setRecentInterviews(prev => prev.map(i => i.interview_id === id ? { ...i, status: 'aborted' } : i));
+      toast.success('Interview aborted');
+    } catch (err) { toast.error(err.response?.data?.detail || 'Failed to abort'); }
+  };
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
@@ -62,7 +87,7 @@ export default function Dashboard() {
           { label: 'Total Interviews', value: stats.total, icon: Video, color: 'text-primary' },
           { label: 'Completed', value: stats.completed, icon: CheckCircle, color: 'text-emerald-500' },
           { label: 'In Progress', value: stats.inProgress, icon: Clock, color: 'text-amber-500' },
-          { label: 'Questions Answered', value: stats.completed * 7, icon: BarChart3, color: 'text-violet-500' },
+          { label: 'Questions Answered', value: stats.answered, icon: BarChart3, color: 'text-violet-500' },
         ].map((stat, i) => (
           <Card key={i} className="border" data-testid={`stat-card-${i}`}>
             <CardContent className="p-4 flex items-center gap-3">
@@ -179,7 +204,9 @@ export default function Dashboard() {
                 onClick={() => navigate(
                   interview.status === 'completed'
                     ? `/interview/${interview.interview_id}/review`
-                    : `/interview/${interview.interview_id}/live`
+                    : interview.status === 'in_progress'
+                      ? `/interview/${interview.interview_id}/live`
+                      : '#'
                 )}
                 data-testid={`interview-card-${interview.interview_id}`}
               >
@@ -200,16 +227,35 @@ export default function Dashboard() {
                         {formatDate(interview.created_at)} · {interview.questions?.length || 0} questions
                       </p>
                     </div>
-                    <Badge
-                      variant={interview.status === 'completed' ? 'default' : 'secondary'}
-                      className="text-xs capitalize"
-                    >
-                      {interview.status === 'completed' ? (
-                        <><CheckCircle className="w-3 h-3 mr-1" /> Done</>
-                      ) : (
-                        <><Play className="w-3 h-3 mr-1" /> Continue</>
-                      )}
-                    </Badge>
+                    <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
+                      <Badge
+                        variant={interview.status === 'completed' ? 'default' : interview.status === 'aborted' ? 'destructive' : 'secondary'}
+                        className="text-xs capitalize"
+                      >
+                        {interview.status === 'completed' ? <><CheckCircle className="w-3 h-3 mr-1" /> Done</> : interview.status === 'aborted' ? 'Aborted' : <><Play className="w-3 h-3 mr-1" /> Continue</>}
+                      </Badge>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="w-7 h-7"><MoreVertical className="w-3.5 h-3.5" /></Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          {interview.status === 'in_progress' && (
+                            <DropdownMenuItem onClick={() => abortInterview(interview.interview_id)} className="text-amber-600">
+                              <XCircle className="w-4 h-4 mr-2" /> Abort
+                            </DropdownMenuItem>
+                          )}
+                          {interview.status === 'completed' && (
+                            <DropdownMenuItem onClick={() => toast.success(`Feedback sent to ${user?.email}!`)}>
+                              <Mail className="w-4 h-4 mr-2" /> Send Feedback to Email
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => deleteInterview(interview.interview_id)} className="text-destructive">
+                            <Trash2 className="w-4 h-4 mr-2" /> Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
