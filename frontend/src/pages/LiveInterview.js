@@ -9,10 +9,11 @@ import { toast } from 'sonner';
 import axios from 'axios';
 import {
   Video, VideoOff, Mic, MicOff, Play, SkipForward,
-  CheckCircle, Loader2, AlertCircle
+  CheckCircle, Loader2, AlertCircle, UserCircle
 } from 'lucide-react';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const INTERVIEWER_IMG = 'https://images.unsplash.com/photo-1740153204804-200310378f2f?crop=entropy&cs=srgb&fm=jpg&w=600&q=80';
 
 function getSupportedMimeType() {
   const types = ['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm','video/mp4'];
@@ -30,7 +31,6 @@ export default function LiveInterview() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
   const [countdown, setCountdown] = useState(0);
-  const [transcript, setTranscript] = useState('');
   const [mediaReady, setMediaReady] = useState(false);
   const [mediaError, setMediaError] = useState(null);
   const [cameraOn, setCameraOn] = useState(false);
@@ -44,15 +44,12 @@ export default function LiveInterview() {
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
   const timerRef = useRef(null);
-  const recognitionRef = useRef(null);
-  const transcriptRef = useRef('');
   const isRecordingRef = useRef(false);
   const mountedRef = useRef(true);
-  const autoStopRef = useRef(null);
+  const countdownRef = useRef(0);
   const recordStartTimeRef = useRef(0);
 
   const timeLimit = interview?.time_per_question || 120;
-  const countdownRef = useRef(0);
 
   useEffect(() => {
     if (!interview) {
@@ -91,28 +88,23 @@ export default function LiveInterview() {
       mountedRef.current = false;
       if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
       if (timerRef.current) clearInterval(timerRef.current);
-      if (autoStopRef.current) clearTimeout(autoStopRef.current);
-      if (recognitionRef.current) { try { recognitionRef.current.stop(); } catch {} }
     };
   }, [initMedia]);
 
   const toggleCamera = () => { if (streamRef.current) { const t = streamRef.current.getVideoTracks()[0]; if (t) { t.enabled = !t.enabled; setCameraOn(t.enabled); } } };
   const toggleMic = () => { if (streamRef.current) { const t = streamRef.current.getAudioTracks()[0]; if (t) { t.enabled = !t.enabled; setMicOn(t.enabled); } } };
 
-  // Stop recording helper (used by manual stop AND auto-stop)
   const doStopRecording = useCallback(async (isAutoStop = false) => {
     if (!isRecordingRef.current) return;
     isRecordingRef.current = false;
     setIsRecording(false);
 
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-    if (autoStopRef.current) { clearTimeout(autoStopRef.current); autoStopRef.current = null; }
-    if (recognitionRef.current) { try { recognitionRef.current.stop(); } catch {} recognitionRef.current = null; }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') mediaRecorderRef.current.stop();
 
     await new Promise(resolve => setTimeout(resolve, 500));
 
-    if (isAutoStop) toast.info('Time\'s up! Auto-submitting your answer...');
+    if (isAutoStop) toast.info("Time's up! Auto-submitting your answer...");
 
     setSavingResponse(true);
     const savedIndex = currentIndex;
@@ -130,18 +122,13 @@ export default function LiveInterview() {
         recordingPath = uploadRes.data.recording_path;
         whisperTranscript = uploadRes.data.transcript;
       }
-      const finalTranscript = whisperTranscript || transcriptRef.current || transcript || 'No transcript available';
       await axios.post(`${API}/interviews/${interviewId}/responses`, {
         question_index: currentIndex,
-        transcript: finalTranscript,
+        transcript: whisperTranscript || 'Transcript processing...',
         recording_path: recordingPath,
         duration: elapsed
       }, { headers: getAuthHeaders(), withCredentials: true });
 
-      setAnsweredQuestions(prev => {
-        const next = new Set([...prev, savedIndex]);
-        return next;
-      });
       toast.success('Response saved!');
 
       // Auto-navigate to next unanswered question
@@ -149,20 +136,17 @@ export default function LiveInterview() {
         const totalQ = interview.questions.length;
         setAnsweredQuestions(prev => {
           const answered = new Set([...prev, savedIndex]);
-          // Find next unanswered
           let nextIdx = -1;
           for (let i = savedIndex + 1; i < totalQ; i++) {
             if (!answered.has(i)) { nextIdx = i; break; }
           }
           if (nextIdx === -1) {
-            // Check earlier questions
             for (let i = 0; i < savedIndex; i++) {
               if (!answered.has(i)) { nextIdx = i; break; }
             }
           }
           if (nextIdx >= 0) {
             setCurrentIndex(nextIdx);
-            setTranscript('');
             setCountdown(0);
           }
           return answered;
@@ -170,7 +154,7 @@ export default function LiveInterview() {
       }
     } catch { toast.error('Failed to save response'); }
     finally { setSavingResponse(false); }
-  }, [currentIndex, interviewId, getAuthHeaders, transcript, interview]);
+  }, [currentIndex, interviewId, getAuthHeaders, interview]);
 
   const startRecording = () => {
     if (!streamRef.current || !mediaReady) { toast.error('Camera/mic not available. Click "Enable Camera" to retry.'); return; }
@@ -179,8 +163,6 @@ export default function LiveInterview() {
     if (!vt || vt.readyState === 'ended' || !at || at.readyState === 'ended') { toast.error('Media stream ended. Reinitializing...'); setMediaReady(false); initMedia(); return; }
 
     chunksRef.current = [];
-    transcriptRef.current = '';
-    setTranscript('');
     countdownRef.current = timeLimit;
     setCountdown(timeLimit);
     recordStartTimeRef.current = Date.now();
@@ -193,7 +175,6 @@ export default function LiveInterview() {
       recorder.start(1000);
     } catch { toast.error('Failed to start recording.'); return; }
 
-    // Countdown timer — use ref to avoid calling side-effects inside setState
     timerRef.current = setInterval(() => {
       countdownRef.current -= 1;
       const val = countdownRef.current;
@@ -203,35 +184,13 @@ export default function LiveInterview() {
       }
     }, 1000);
 
-    // Speech recognition
-    try {
-      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (SR) {
-        const recognition = new SR();
-        recognition.continuous = true; recognition.interimResults = true; recognition.lang = 'en-US';
-        recognition.onresult = (event) => {
-          let final = '', interim = '';
-          for (let i = 0; i < event.results.length; i++) {
-            if (event.results[i].isFinal) final += event.results[i][0].transcript + ' ';
-            else interim += event.results[i][0].transcript;
-          }
-          transcriptRef.current = final;
-          setTranscript(final + interim);
-        };
-        recognition.onerror = () => {};
-        recognition.onend = () => { if (isRecordingRef.current) try { recognition.start(); } catch {} };
-        recognition.start();
-        recognitionRef.current = recognition;
-      }
-    } catch {}
-
     isRecordingRef.current = true;
     setIsRecording(true);
   };
 
   const nextQuestion = () => {
     if (interview && currentIndex < interview.questions.length - 1) {
-      setCurrentIndex(prev => prev + 1); setTranscript(''); setCountdown(0);
+      setCurrentIndex(prev => prev + 1); setCountdown(0);
     }
   };
 
@@ -286,88 +245,123 @@ export default function LiveInterview() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="grid lg:grid-cols-5 gap-6">
-          {/* Left */}
-          <div className="lg:col-span-3 space-y-6">
-            <Card className="border" data-testid="question-card">
-              <CardContent className="p-6 space-y-4">
+        {/* Video Call Layout */}
+        <div className="grid lg:grid-cols-2 gap-4 mb-6">
+          {/* Interviewer Panel (Left / Large) */}
+          <Card className="border overflow-hidden" data-testid="interviewer-panel">
+            <div className="relative aspect-[4/3] bg-zinc-900">
+              <img
+                src={INTERVIEWER_IMG}
+                alt="AI Interviewer"
+                className="w-full h-full object-cover"
+              />
+              {/* Name tag overlay */}
+              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-4">
                 <div className="flex items-center gap-2">
-                  <Badge variant="secondary" className="text-xs font-mono">Q{currentIndex + 1}</Badge>
-                  {isCurrentAnswered && <Badge className="text-xs gap-1 bg-emerald-500/10 text-emerald-500 border-emerald-500/20"><CheckCircle className="w-3 h-3" /> Answered</Badge>}
+                  <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                  <span className="text-white text-sm font-medium">Sarah Mitchell</span>
+                  <span className="text-white/60 text-xs">· AI Interviewer</span>
                 </div>
-                <h2 className="text-lg font-semibold font-heading leading-relaxed">{questions[currentIndex]}</h2>
-                {/* Countdown bar during recording */}
-                {isRecording && (
-                  <div className="space-y-1">
-                    <div className="h-2 bg-muted rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full transition-all duration-1000 ease-linear ${isLowTime ? 'bg-red-500' : 'bg-primary'}`} style={{ width: `${countdownPct}%` }} />
-                    </div>
-                    <p className="text-xs text-muted-foreground text-right">{formatTime(countdown)} remaining</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card className="border" data-testid="transcript-card">
-              <CardContent className="p-6">
-                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">Live Transcript</p>
-                {transcript ? <p className="text-sm leading-relaxed">{transcript}</p> : <p className="text-sm text-muted-foreground italic">{isRecording ? 'Listening... Start speaking' : 'Transcript will appear here when you start recording'}</p>}
-              </CardContent>
-            </Card>
-
-            <div className="flex flex-wrap gap-2">
-              {questions.map((_, i) => (
-                <Button key={i} variant={i === currentIndex ? 'default' : answeredQuestions.has(i) ? 'secondary' : 'outline'} size="sm" className="w-9 h-9 p-0 text-xs font-mono" onClick={() => { if (!isRecording) { setCurrentIndex(i); setTranscript(''); setCountdown(0); } }} disabled={isRecording} data-testid={`question-nav-${i}`}>
-                  {answeredQuestions.has(i) ? <CheckCircle className="w-3 h-3" /> : i + 1}
-                </Button>
-              ))}
+              </div>
             </div>
-          </div>
+          </Card>
 
-          {/* Right */}
-          <div className="lg:col-span-2 space-y-4">
-            <div className="sticky top-24">
-              <Card className="border overflow-hidden" data-testid="video-preview">
-                <div className="relative aspect-[4/3] bg-black rounded-md overflow-hidden">
-                  <video ref={videoRef} autoPlay playsInline muted className={`w-full h-full object-cover ${!cameraOn ? 'hidden' : ''}`} />
-                  {!cameraOn && <div className="absolute inset-0 flex items-center justify-center"><div className="text-center space-y-2"><VideoOff className="w-8 h-8 text-zinc-500 mx-auto" /><p className="text-xs text-zinc-400">{mediaError ? 'Permission needed' : 'Camera off'}</p></div></div>}
-                  {isRecording && <div className="absolute top-3 left-3 flex items-center gap-2 glass rounded-md px-3 py-1.5"><div className="w-2 h-2 rounded-full bg-red-500 animate-recording-pulse" /><span className={`text-xs font-mono ${isLowTime ? 'text-red-400' : 'text-white'}`}>{formatTime(countdown)}</span></div>}
-                  {isRecording && <div className="absolute bottom-3 left-3 right-3 glass rounded-md px-3 py-2 flex items-center gap-1 justify-center">{Array.from({ length: 12 }).map((_, i) => <div key={i} className="w-1 bg-red-400 rounded-full animate-waveform" style={{ animationDelay: `${i * 0.08}s`, height: '4px' }} />)}</div>}
-                </div>
-              </Card>
-
-              {mediaError && (
-                <div className="flex items-start gap-2 p-3 mt-3 rounded-md bg-destructive/10 border border-destructive/20" data-testid="media-error-banner">
-                  <AlertCircle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
-                  <div className="text-xs"><p className="text-destructive font-medium">{mediaError}</p><Button variant="link" size="sm" className="h-auto p-0 text-xs text-destructive underline mt-1" onClick={initMedia} data-testid="retry-media-btn">Retry camera access</Button></div>
+          {/* User Camera Panel (Right) */}
+          <Card className="border overflow-hidden" data-testid="video-preview">
+            <div className="relative aspect-[4/3] bg-black">
+              <video ref={videoRef} autoPlay playsInline muted className={`w-full h-full object-cover ${!cameraOn ? 'hidden' : ''}`} />
+              {!cameraOn && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="text-center space-y-2">
+                    <VideoOff className="w-8 h-8 text-zinc-500 mx-auto" />
+                    <p className="text-xs text-zinc-400">{mediaError ? 'Permission needed' : 'Camera off'}</p>
+                  </div>
                 </div>
               )}
-
-              <div className="flex items-center justify-center gap-3 mt-4">
-                <Button variant="outline" size="icon" className="w-10 h-10 rounded-full" onClick={toggleCamera} data-testid="toggle-camera-btn">{cameraOn ? <Video className="w-4 h-4" /> : <VideoOff className="w-4 h-4" />}</Button>
-                <Button variant="outline" size="icon" className="w-10 h-10 rounded-full" onClick={toggleMic} data-testid="toggle-mic-btn">{micOn ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}</Button>
-
-                {!mediaReady && !isRecording ? (
-                  <Button size="lg" className="gap-2 rounded-full px-6" onClick={initMedia} data-testid="enable-camera-btn"><Video className="w-4 h-4" /> Enable Camera</Button>
-                ) : !isRecording ? (
-                  <Button size="lg" className="gap-2 rounded-full px-6 bg-red-500 hover:bg-red-600 text-white" onClick={startRecording} disabled={isCurrentAnswered || savingResponse} data-testid="start-recording-btn">
-                    {savingResponse ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Play className="w-4 h-4" /> Record ({formatTime(timeLimit)})</>}
-                  </Button>
-                ) : (
-                  <Button size="lg" className="gap-2 rounded-full px-6 bg-red-600 hover:bg-red-700 text-white animate-recording-pulse" onClick={() => doStopRecording(false)} data-testid="stop-recording-btn">
-                    <CheckCircle className="w-4 h-4" /> Stop &amp; Submit
-                  </Button>
-                )}
-
-                <Button variant="outline" size="icon" className="w-10 h-10 rounded-full" onClick={nextQuestion} disabled={isRecording || isLastQuestion} data-testid="next-question-btn"><SkipForward className="w-4 h-4" /></Button>
+              {isRecording && (
+                <div className="absolute top-3 left-3 flex items-center gap-2 glass rounded-md px-3 py-1.5">
+                  <div className="w-2 h-2 rounded-full bg-red-500 animate-recording-pulse" />
+                  <span className={`text-xs font-mono ${isLowTime ? 'text-red-400' : 'text-white'}`}>{formatTime(countdown)}</span>
+                </div>
+              )}
+              {isRecording && (
+                <div className="absolute bottom-3 left-3 right-3 glass rounded-md px-3 py-2 flex items-center gap-1 justify-center">
+                  {Array.from({ length: 12 }).map((_, i) => (
+                    <div key={i} className="w-1 bg-red-400 rounded-full animate-waveform" style={{ animationDelay: `${i * 0.08}s`, height: '4px' }} />
+                  ))}
+                </div>
+              )}
+              {/* User name tag */}
+              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-3">
+                <span className="text-white text-xs font-medium">You</span>
               </div>
-
-              <p className="text-xs text-muted-foreground text-center mt-3">
-                {!mediaReady ? 'Click "Enable Camera" to start recording' : isRecording ? 'Click "Stop & Submit" to finish early, or wait for auto-submit' : isCurrentAnswered ? 'This question is answered. Navigate to another.' : `Click Record to answer (${formatTime(timeLimit)} per question)`}
-              </p>
             </div>
+          </Card>
+        </div>
+
+        {/* Question Card - below video feeds, like a chat/prompt area */}
+        <Card className="border mb-4" data-testid="question-card">
+          <CardContent className="p-5">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                <UserCircle className="w-5 h-5 text-primary" />
+              </div>
+              <div className="flex-1 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-primary">Sarah Mitchell</span>
+                  <Badge variant="secondary" className="text-[10px] font-mono">Q{currentIndex + 1}</Badge>
+                  {isCurrentAnswered && <Badge className="text-[10px] gap-1 bg-emerald-500/10 text-emerald-500 border-emerald-500/20"><CheckCircle className="w-2.5 h-2.5" /> Answered</Badge>}
+                </div>
+                <p className="text-base font-medium leading-relaxed">{questions[currentIndex]}</p>
+                {isRecording && (
+                  <div className="space-y-1 pt-1">
+                    <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full transition-all duration-1000 ease-linear ${isLowTime ? 'bg-red-500' : 'bg-primary'}`} style={{ width: `${countdownPct}%` }} />
+                    </div>
+                    <p className="text-[10px] text-muted-foreground text-right">{formatTime(countdown)} remaining</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Controls Bar */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {questions.map((_, i) => (
+              <Button key={i} variant={i === currentIndex ? 'default' : answeredQuestions.has(i) ? 'secondary' : 'outline'} size="sm" className="w-9 h-9 p-0 text-xs font-mono" onClick={() => { if (!isRecording) { setCurrentIndex(i); setCountdown(0); } }} disabled={isRecording} data-testid={`question-nav-${i}`}>
+                {answeredQuestions.has(i) ? <CheckCircle className="w-3 h-3" /> : i + 1}
+              </Button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-3">
+            {mediaError && (
+              <Button variant="link" size="sm" className="text-xs text-destructive" onClick={initMedia} data-testid="retry-media-btn">Retry camera</Button>
+            )}
+            <Button variant="outline" size="icon" className="w-10 h-10 rounded-full" onClick={toggleCamera} data-testid="toggle-camera-btn">{cameraOn ? <Video className="w-4 h-4" /> : <VideoOff className="w-4 h-4" />}</Button>
+            <Button variant="outline" size="icon" className="w-10 h-10 rounded-full" onClick={toggleMic} data-testid="toggle-mic-btn">{micOn ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}</Button>
+
+            {!mediaReady && !isRecording ? (
+              <Button size="lg" className="gap-2 rounded-full px-6" onClick={initMedia} data-testid="enable-camera-btn"><Video className="w-4 h-4" /> Enable Camera</Button>
+            ) : !isRecording ? (
+              <Button size="lg" className="gap-2 rounded-full px-6 bg-red-500 hover:bg-red-600 text-white" onClick={startRecording} disabled={isCurrentAnswered || savingResponse} data-testid="start-recording-btn">
+                {savingResponse ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Play className="w-4 h-4" /> Record ({formatTime(timeLimit)})</>}
+              </Button>
+            ) : (
+              <Button size="lg" className="gap-2 rounded-full px-6 bg-red-600 hover:bg-red-700 text-white animate-recording-pulse" onClick={() => doStopRecording(false)} data-testid="stop-recording-btn">
+                <CheckCircle className="w-4 h-4" /> Stop &amp; Submit
+              </Button>
+            )}
+
+            <Button variant="outline" size="icon" className="w-10 h-10 rounded-full" onClick={nextQuestion} disabled={isRecording || isLastQuestion} data-testid="next-question-btn"><SkipForward className="w-4 h-4" /></Button>
           </div>
         </div>
+
+        <p className="text-xs text-muted-foreground text-center mt-4">
+          {!mediaReady ? 'Click "Enable Camera" to start recording' : isRecording ? 'Click "Stop & Submit" to finish early, or wait for auto-submit' : isCurrentAnswered ? 'This question is answered. Navigate to another.' : `Click Record to answer (${formatTime(timeLimit)} per question)`}
+        </p>
       </div>
     </div>
   );
