@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
-const INTERVIEWER_IMG = 'https://images.unsplash.com/photo-1740153204804-200310378f2f?crop=entropy&cs=srgb&fm=jpg&w=600&q=80';
+const INTERVIEWER_IMG = 'https://static.prod-images.emergentagent.com/jobs/c89e23d1-dccb-4a72-8c4d-d38bb4d00551/images/55b327e4a4c91c45508bc357b58570c02497de1d8011a9bbbf4ea4a97eca40df.png';
 
 function getSupportedMimeType() {
   const types = ['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm','video/mp4'];
@@ -38,6 +38,7 @@ export default function LiveInterview() {
   const [completing, setCompleting] = useState(false);
   const [savingResponse, setSavingResponse] = useState(false);
   const [answeredQuestions, setAnsweredQuestions] = useState(new Set());
+  const [isSpeaking, setIsSpeaking] = useState(false);
 
   const videoRef = useRef(null);
   const streamRef = useRef(null);
@@ -48,6 +49,7 @@ export default function LiveInterview() {
   const mountedRef = useRef(true);
   const countdownRef = useRef(0);
   const recordStartTimeRef = useRef(0);
+  const lastSpokenIndexRef = useRef(-1);
 
   const timeLimit = interview?.time_per_question || 120;
 
@@ -88,8 +90,48 @@ export default function LiveInterview() {
       mountedRef.current = false;
       if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
       if (timerRef.current) clearInterval(timerRef.current);
+      window.speechSynthesis.cancel();
     };
   }, [initMedia]);
+
+  // Text-to-speech: speak each new question aloud
+  const speakQuestion = useCallback((text) => {
+    if (!text || !window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 0.95;
+    utterance.pitch = 1.1;
+    utterance.lang = 'en-US';
+    // Try to pick a female voice
+    const voices = window.speechSynthesis.getVoices();
+    const femaleVoice = voices.find(v => /female|samantha|zira|karen|moira|fiona|victoria|susan/i.test(v.name))
+      || voices.find(v => v.lang.startsWith('en') && /woman|girl/i.test(v.name))
+      || voices.find(v => v.lang.startsWith('en'));
+    if (femaleVoice) utterance.voice = femaleVoice;
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+    window.speechSynthesis.speak(utterance);
+  }, []);
+
+  // Load voices (some browsers load them async)
+  useEffect(() => {
+    const loadVoices = () => window.speechSynthesis.getVoices();
+    loadVoices();
+    if (window.speechSynthesis.onvoiceschanged !== undefined) {
+      window.speechSynthesis.onvoiceschanged = loadVoices;
+    }
+  }, []);
+
+  // Speak when question changes
+  useEffect(() => {
+    if (interview && interview.questions && interview.questions[currentIndex] && lastSpokenIndexRef.current !== currentIndex) {
+      lastSpokenIndexRef.current = currentIndex;
+      // Short delay so the UI updates first
+      const t = setTimeout(() => speakQuestion(interview.questions[currentIndex]), 400);
+      return () => clearTimeout(t);
+    }
+  }, [currentIndex, interview, speakQuestion]);
 
   const toggleCamera = () => { if (streamRef.current) { const t = streamRef.current.getVideoTracks()[0]; if (t) { t.enabled = !t.enabled; setCameraOn(t.enabled); } } };
   const toggleMic = () => { if (streamRef.current) { const t = streamRef.current.getAudioTracks()[0]; if (t) { t.enabled = !t.enabled; setMicOn(t.enabled); } } };
@@ -253,12 +295,23 @@ export default function LiveInterview() {
               <img
                 src={INTERVIEWER_IMG}
                 alt="AI Interviewer"
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover object-top"
               />
+              {/* Speaking indicator */}
+              {isSpeaking && (
+                <div className="absolute top-3 right-3 flex items-center gap-2 glass rounded-md px-3 py-1.5" data-testid="speaking-indicator">
+                  <div className="flex items-center gap-0.5">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <div key={i} className="w-1 bg-emerald-400 rounded-full animate-waveform" style={{ animationDelay: `${i * 0.1}s`, height: '4px' }} />
+                    ))}
+                  </div>
+                  <span className="text-emerald-400 text-xs font-medium">Speaking</span>
+                </div>
+              )}
               {/* Name tag overlay */}
               <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-4">
                 <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                  <div className={`w-2 h-2 rounded-full ${isSpeaking ? 'bg-emerald-400 animate-recording-pulse' : 'bg-emerald-400'}`} />
                   <span className="text-white text-sm font-medium">Sarah Mitchell</span>
                   <span className="text-white/60 text-xs">· AI Interviewer</span>
                 </div>
@@ -311,6 +364,7 @@ export default function LiveInterview() {
                   <span className="text-xs font-semibold text-primary">Sarah Mitchell</span>
                   <Badge variant="secondary" className="text-[10px] font-mono">Q{currentIndex + 1}</Badge>
                   {isCurrentAnswered && <Badge className="text-[10px] gap-1 bg-emerald-500/10 text-emerald-500 border-emerald-500/20"><CheckCircle className="w-2.5 h-2.5" /> Answered</Badge>}
+                  {isSpeaking && <Badge variant="outline" className="text-[10px] gap-1 text-emerald-500 border-emerald-500/30 animate-pulse">Speaking</Badge>}
                 </div>
                 <p className="text-base font-medium leading-relaxed">{questions[currentIndex]}</p>
                 {isRecording && (
