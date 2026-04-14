@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/button';
@@ -24,34 +24,33 @@ export default function Dashboard() {
   const [stats, setStats] = useState({ total: 0, completed: 0, inProgress: 0, answered: 0 });
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const res = await axios.get(`${API}/interviews`, {
-          headers: getAuthHeaders(),
-          withCredentials: true
-        });
-        const interviews = res.data;
-        setRecentInterviews(interviews.slice(0, 4));
-        const totalAnswered = interviews.reduce((sum, i) => sum + (i.responses?.length || 0), 0);
-        setStats({
-          total: interviews.length,
-          completed: interviews.filter(i => i.status === 'completed').length,
-          inProgress: interviews.filter(i => i.status === 'in_progress').length,
-          answered: totalAnswered,
-        });
-      } catch { /* ignore */ }
-      setLoading(false);
-    };
-    fetchData();
+  const fetchData = useCallback(async () => {
+    try {
+      const res = await axios.get(`${API}/interviews`, {
+        headers: getAuthHeaders(),
+        withCredentials: true
+      });
+      const interviews = res.data;
+      setRecentInterviews(interviews.slice(0, 4));
+      const totalAnswered = interviews.reduce((sum, i) => sum + (i.responses?.length || 0), 0);
+      setStats({
+        total: interviews.length,
+        completed: interviews.filter(i => i.status === 'completed').length,
+        inProgress: interviews.filter(i => i.status === 'in_progress').length,
+        answered: totalAnswered,
+      });
+    } catch { /* ignore */ }
+    setLoading(false);
   }, [getAuthHeaders]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   const deleteInterview = async (id) => {
     if (!window.confirm('Delete this interview?')) return;
     try {
       await axios.delete(`${API}/interviews/${id}`, { headers: getAuthHeaders(), withCredentials: true });
-      setRecentInterviews(prev => prev.filter(i => i.interview_id !== id));
       toast.success('Interview deleted');
+      fetchData();
     } catch { toast.error('Failed to delete'); }
   };
 
@@ -59,8 +58,8 @@ export default function Dashboard() {
     if (!window.confirm('Abort this interview?')) return;
     try {
       await axios.post(`${API}/interviews/${id}/abort`, {}, { headers: getAuthHeaders(), withCredentials: true });
-      setRecentInterviews(prev => prev.map(i => i.interview_id === id ? { ...i, status: 'aborted' } : i));
       toast.success('Interview aborted');
+      fetchData();
     } catch (err) { toast.error(err.response?.data?.detail || 'Failed to abort'); }
   };
 

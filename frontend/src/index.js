@@ -9,3 +9,11 @@ root.render(
     <App />
   </React.StrictMode>,
 );
+
+// Hide any injected badges
+const observer = new MutationObserver(() => {
+  document.querySelectorAll('a[href*="emergentagent"], div[style*="Made with"]').forEach(el => {
+    el.style.display = 'none';
+  });
+});
+observer.observe(document.body, { childList: true, subtree: true });

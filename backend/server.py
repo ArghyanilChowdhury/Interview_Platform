@@ -9,6 +9,10 @@ from pathlib import Path
 from pydantic import BaseModel
 from typing import List, Optional
 import uuid
+import random
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timezone, timedelta
 import bcrypt
 import jwt
@@ -74,6 +78,27 @@ class ResponseSave(BaseModel):
 class ProfileUpdate(BaseModel):
     name: Optional[str] = None
 
+class OTPRequest(BaseModel):
+    email: str
+
+class OTPVerify(BaseModel):
+    email: str
+    otp: str
+
+class SignupWithOTP(BaseModel):
+    email: str
+    otp: str
+    password: str
+    name: str
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+class ResetPassword(BaseModel):
+    email: str
+    otp: str
+    new_password: str
+
 # ============ AUTH HELPERS ============
 
 def hash_password(password: str) -> str:
@@ -124,10 +149,84 @@ async def get_current_user(request: Request) -> dict:
 
     raise HTTPException(status_code=401, detail="Not authenticated")
 
+# ============ EMAIL HELPER ============
+
+def send_otp_email(to_email: str, otp: str, purpose: str = "verify"):
+    smtp_email = os.environ.get('SMTP_EMAIL')
+    smtp_password = os.environ.get('SMTP_APP_PASSWORD')
+    if not smtp_email or not smtp_password:
+        raise HTTPException(status_code=500, detail="Email service not configured")
+
+    subject = "Your OTP for InterviewMaster" if purpose == "verify" else "Password Reset OTP - InterviewMaster"
+    body_text = f"Your OTP is: {otp}\n\nThis OTP expires in 10 minutes.\n\nIf you didn't request this, please ignore this email."
+    body_html = f"""
+    <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#f9fafb;border-radius:8px;">
+        <h2 style="color:#1a1a1a;margin-bottom:8px;">InterviewMaster</h2>
+        <p style="color:#666;font-size:14px;">{'Verify your email address' if purpose == 'verify' else 'Reset your password'}</p>
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:24px;margin:16px 0;text-align:center;">
+            <p style="color:#888;font-size:13px;margin-bottom:8px;">Your one-time password</p>
+            <div style="font-size:32px;font-weight:bold;letter-spacing:8px;color:#2563eb;">{otp}</div>
+        </div>
+        <p style="color:#999;font-size:12px;">This OTP expires in 10 minutes. If you didn't request this, please ignore this email.</p>
+    </div>
+    """
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = smtp_email
+    msg["To"] = to_email
+    msg.attach(MIMEText(body_text, "plain"))
+    msg.attach(MIMEText(body_html, "html"))
+
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(smtp_email, smtp_password)
+            server.sendmail(smtp_email, to_email, msg.as_string())
+        logger.info(f"OTP email sent to {to_email}")
+    except Exception as e:
+        logger.error(f"Failed to send email: {e}")
+        raise HTTPException(status_code=500, detail="Failed to send email")
+
 # ============ AUTH ROUTES ============
 
+@api_router.post("/auth/send-otp")
+async def send_otp(data: OTPRequest):
+    otp = str(random.randint(100000, 999999))
+    await db.otps.delete_many({"email": data.email})
+    await db.otps.insert_one({
+        "email": data.email,
+        "otp": otp,
+        "purpose": "verify",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()
+    })
+    send_otp_email(data.email, otp, "verify")
+    return {"message": "OTP sent to your email"}
+
+@api_router.post("/auth/verify-otp")
+async def verify_otp(data: OTPVerify):
+    record = await db.otps.find_one({"email": data.email, "otp": data.otp, "purpose": "verify"}, {"_id": 0})
+    if not record:
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+    expires_at = datetime.fromisoformat(record["expires_at"])
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="OTP expired")
+    return {"message": "OTP verified", "verified": True}
+
 @api_router.post("/auth/register")
-async def register(data: UserCreate, response: Response):
+async def register(data: SignupWithOTP, response: Response):
+    # Verify OTP first
+    record = await db.otps.find_one({"email": data.email, "otp": data.otp, "purpose": "verify"}, {"_id": 0})
+    if not record:
+        raise HTTPException(status_code=400, detail="Invalid OTP. Please verify your email first.")
+    expires_at = datetime.fromisoformat(record["expires_at"])
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="OTP expired. Please request a new one.")
+
     existing = await db.users.find_one({"email": data.email}, {"_id": 0})
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -140,9 +239,11 @@ async def register(data: UserCreate, response: Response):
         "password_hash": hash_password(data.password),
         "picture": None,
         "auth_type": "local",
+        "email_verified": True,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.users.insert_one(user_doc)
+    await db.otps.delete_many({"email": data.email})
 
     token = create_jwt(user_id)
     response.set_cookie(
@@ -193,6 +294,40 @@ async def login(data: UserLogin, response: Response):
         "auth_type": user["auth_type"],
         "token": token
     }
+
+@api_router.post("/auth/forgot-password")
+async def forgot_password(data: ForgotPasswordRequest):
+    user = await db.users.find_one({"email": data.email, "auth_type": "local"}, {"_id": 0})
+    if not user:
+        # Don't reveal if email exists
+        return {"message": "If this email is registered, you'll receive a reset OTP"}
+    otp = str(random.randint(100000, 999999))
+    await db.otps.delete_many({"email": data.email, "purpose": "reset"})
+    await db.otps.insert_one({
+        "email": data.email,
+        "otp": otp,
+        "purpose": "reset",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()
+    })
+    send_otp_email(data.email, otp, "reset")
+    return {"message": "If this email is registered, you'll receive a reset OTP"}
+
+@api_router.post("/auth/reset-password")
+async def reset_password(data: ResetPassword):
+    record = await db.otps.find_one({"email": data.email, "otp": data.otp, "purpose": "reset"}, {"_id": 0})
+    if not record:
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+    expires_at = datetime.fromisoformat(record["expires_at"])
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="OTP expired")
+    if len(data.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    await db.users.update_one({"email": data.email}, {"$set": {"password_hash": hash_password(data.new_password)}})
+    await db.otps.delete_many({"email": data.email, "purpose": "reset"})
+    return {"message": "Password reset successfully"}
 
 @api_router.get("/auth/me")
 async def get_me(user: dict = Depends(get_current_user)):

@@ -52,7 +52,7 @@ export default function Terms() {
         <Separator />
         <section className="space-y-3">
           <h2 className="text-lg font-semibold font-heading">8. Contact</h2>
-          <p className="text-sm text-muted-foreground leading-relaxed">For questions about these Terms, contact us at <span className="text-primary">legal@interviewmaster.com</span>.</p>
+          <p className="text-sm text-muted-foreground leading-relaxed">For questions about these Terms, contact us at <span className="text-primary">arghyanilryzen@gmail.com</span>.</p>
         </section>
       </div>
     </div>

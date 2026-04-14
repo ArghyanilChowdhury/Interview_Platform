@@ -38,7 +38,7 @@ export default function Contact() {
         {/* Contact Info */}
         <div className="space-y-4">
           {[
-            { icon: Mail, label: 'Email', value: 'support@interviewmaster.com', sub: 'We reply within 24 hours' },
+            { icon: Mail, label: 'Email', value: 'arghyanilryzen@gmail.com', sub: 'We reply within 24 hours' },
             { icon: Clock, label: 'Hours', value: 'Mon - Fri, 9AM - 6PM', sub: 'IST (UTC+5:30)' },
             { icon: MapPin, label: 'Location', value: 'Remote-first team', sub: 'Operating globally' },
           ].map((item, i) => (

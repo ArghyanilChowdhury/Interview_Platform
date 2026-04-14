@@ -64,8 +64,8 @@ export function AuthProvider({ children }) {
     return res.data;
   };
 
-  const register = async (email, password, name) => {
-    const res = await axios.post(`${API}/auth/register`, { email, password, name }, { withCredentials: true });
+  const register = async (email, otp, password, name) => {
+    const res = await axios.post(`${API}/auth/register`, { email, otp, password, name }, { withCredentials: true });
     if (res.data.token) {
       localStorage.setItem('auth_token', res.data.token);
       tokenRef.current = res.data.token;

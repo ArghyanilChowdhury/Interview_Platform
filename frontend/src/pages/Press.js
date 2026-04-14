@@ -51,7 +51,7 @@ export default function Press() {
         <div className="flex flex-wrap gap-3">
           <Button variant="outline" size="sm">Download Press Kit</Button>
           <Button variant="ghost" size="sm" className="gap-1.5">
-            <Mail className="w-3.5 h-3.5" /> press@interviewmaster.com
+            <Mail className="w-3.5 h-3.5" /> arghyanilryzen@gmail.com
           </Button>
         </div>
       </div>

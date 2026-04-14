@@ -1,10 +1,13 @@
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Separator } from '../components/ui/separator';
+import { Card, CardContent } from '../components/ui/card';
 import {
   Video, Mic, BarChart3, FileText, ArrowRight, CheckCircle, Briefcase,
-  Mail, Heart, Users, Info, Phone, Globe, Github, Twitter, Linkedin
+  Mail, Heart, Users, Info, Phone, Globe, Github, Twitter, Linkedin,
+  ChevronLeft, ChevronRight, Quote, Star
 } from 'lucide-react';
 
 const features = [
@@ -40,7 +43,27 @@ const features = [
   },
 ];
 
-export default function Landing() {
+const testimonials = [
+  { name: 'Priya Sharma', role: 'Software Engineer at Google', text: 'InterviewMaster helped me prepare for my Google interview in just 2 weeks. The AI-generated questions were incredibly realistic and the feedback was spot-on.', stars: 5 },
+  { name: 'Rahul Patel', role: 'Frontend Developer at Amazon', text: 'The video recording feature is a game-changer. I could actually see my body language and improve my confidence before the real interview.', stars: 5 },
+  { name: 'Ananya Gupta', role: 'Data Analyst at Microsoft', text: 'I loved how the questions were tailored to my resume. It felt like a real interview experience. Got placed in my dream company!', stars: 5 },
+  { name: 'Vikram Singh', role: 'Backend Developer at Flipkart', text: 'The AI interviewer Sarah Mitchell felt so real! The text-to-speech feature made the practice sessions incredibly immersive.', stars: 4 },
+  { name: 'Sneha Reddy', role: 'Full Stack Developer at Swiggy', text: 'Best interview prep platform I have used. The instant AI feedback helped me identify my weak areas and work on them effectively.', stars: 5 },
+  { name: 'Arjun Mehta', role: 'DevOps Engineer at Razorpay', text: 'Practicing with configurable time limits helped me manage my answers better. Cleared 3 interviews back-to-back after using this!', stars: 5 },
+];export default function Landing() {
+  const [carouselIndex, setCarouselIndex] = useState(0);
+  const visibleCount = typeof window !== 'undefined' && window.innerWidth >= 1024 ? 3 : typeof window !== 'undefined' && window.innerWidth >= 640 ? 2 : 1;
+  const maxIndex = Math.max(0, testimonials.length - visibleCount);
+
+  const nextSlide = useCallback(() => setCarouselIndex(prev => prev >= maxIndex ? 0 : prev + 1), [maxIndex]);
+  const prevSlide = useCallback(() => setCarouselIndex(prev => prev <= 0 ? maxIndex : prev - 1), [maxIndex]);
+
+  // Auto-scroll
+  useEffect(() => {
+    const timer = setInterval(nextSlide, 4000);
+    return () => clearInterval(timer);
+  }, [nextSlide]);
+
   return (
     <div className="min-h-screen">
       {/* Hero */}
@@ -125,6 +148,67 @@ export default function Landing() {
                 <p className="text-sm text-muted-foreground leading-relaxed">{f.desc}</p>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Testimonials */}
+      <section className="py-24 border-t" data-testid="testimonials-section">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-left max-w-2xl mb-16">
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
+              Testimonials
+            </p>
+            <h2 className="text-3xl md:text-4xl font-semibold tracking-tight font-heading">
+              What Our Users Say
+            </h2>
+          </div>
+          <div className="relative">
+            <div className="overflow-hidden">
+              <div
+                className="flex transition-transform duration-500 ease-out"
+                style={{ transform: `translateX(-${carouselIndex * (100 / visibleCount)}%)` }}
+              >
+                {testimonials.map((t, i) => (
+                  <div key={i} className="flex-shrink-0 px-3" style={{ width: `${100 / visibleCount}%` }}>
+                    <Card className="border h-full" data-testid={`testimonial-card-${i}`}>
+                      <CardContent className="p-6 space-y-4 h-full flex flex-col">
+                        <Quote className="w-8 h-8 text-primary/20" />
+                        <p className="text-sm text-muted-foreground leading-relaxed flex-1">"{t.text}"</p>
+                        <div className="flex items-center gap-1 pt-1">
+                          {Array.from({ length: 5 }).map((_, s) => (
+                            <Star key={s} className={`w-3.5 h-3.5 ${s < t.stars ? 'text-amber-400 fill-amber-400' : 'text-muted'}`} />
+                          ))}
+                        </div>
+                        <div className="pt-2 border-t">
+                          <p className="text-sm font-semibold">{t.name}</p>
+                          <p className="text-xs text-muted-foreground">{t.role}</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* Carousel controls */}
+            <div className="flex items-center justify-center gap-3 mt-8">
+              <Button variant="outline" size="icon" className="rounded-full w-9 h-9" onClick={prevSlide} data-testid="carousel-prev">
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <div className="flex items-center gap-1.5">
+                {Array.from({ length: maxIndex + 1 }).map((_, i) => (
+                  <button
+                    key={i}
+                    className={`w-2 h-2 rounded-full transition-all duration-300 ${i === carouselIndex ? 'bg-primary w-5' : 'bg-muted-foreground/30'}`}
+                    onClick={() => setCarouselIndex(i)}
+                    data-testid={`carousel-dot-${i}`}
+                  />
+                ))}
+              </div>
+              <Button variant="outline" size="icon" className="rounded-full w-9 h-9" onClick={nextSlide} data-testid="carousel-next">
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
         </div>
       </section>
@@ -220,8 +304,8 @@ export default function Landing() {
               &copy; {new Date().getFullYear()} InterviewMaster. All rights reserved.
             </p>
             <div className="flex items-center gap-4 text-xs text-muted-foreground">
-              <a href="mailto:support@interviewmaster.com" className="flex items-center gap-1.5 hover:text-foreground transition-colors" data-testid="footer-email">
-                <Mail className="w-3 h-3" /> support@interviewmaster.com
+              <a href="mailto:arghyanilryzen@gmail.com" className="flex items-center gap-1.5 hover:text-foreground transition-colors" data-testid="footer-email">
+                <Mail className="w-3 h-3" /> arghyanilryzen@gmail.com
               </a>
             </div>
           </div>

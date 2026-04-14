@@ -145,3 +145,19 @@ code {
 .stagger-children > *:nth-child(4) { animation-delay: 240ms; }
 .stagger-children > *:nth-child(5) { animation-delay: 320ms; }
 .stagger-children > *:nth-child(6) { animation-delay: 400ms; }
+
+
+/* Hide Emergent badge */
+[data-testid="emergent-badge"],
+div[class*="emergent"],
+a[href*="emergentagent.com"][style],
+iframe[src*="emergent"],
+div[style*="Made with"],
+div[style*="position: fixed"][style*="bottom"],
+#emergent-badge,
+.emergent-badge {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}

@@ -57,7 +57,7 @@ export default function Cookies() {
 
         <section className="space-y-3">
           <h2 className="text-lg font-semibold font-heading">Contact</h2>
-          <p className="text-sm text-muted-foreground leading-relaxed">If you have questions about our cookie practices, contact us at <span className="text-primary">privacy@interviewmaster.com</span>.</p>
+          <p className="text-sm text-muted-foreground leading-relaxed">If you have questions about our cookie practices, contact us at <span className="text-primary">arghyanilryzen@gmail.com</span>.</p>
         </section>
       </div>
     </div>

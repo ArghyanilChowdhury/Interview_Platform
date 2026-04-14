@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/button';
@@ -25,25 +25,23 @@ export default function InterviewHistory() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
 
-  useEffect(() => {
-    fetchInterviews();
-  }, []);
-
-  const fetchInterviews = async () => {
+  const fetchInterviews = useCallback(async () => {
     try {
       const res = await axios.get(`${API}/interviews`, { headers: getAuthHeaders(), withCredentials: true });
       setInterviews(res.data);
     } catch {}
     setLoading(false);
-  };
+  }, [getAuthHeaders]);
+
+  useEffect(() => { fetchInterviews(); }, [fetchInterviews]);
 
   const deleteInterview = async (e, id) => {
     e.stopPropagation();
     if (!window.confirm('Are you sure you want to delete this interview? This cannot be undone.')) return;
     try {
       await axios.delete(`${API}/interviews/${id}`, { headers: getAuthHeaders(), withCredentials: true });
-      setInterviews(prev => prev.filter(i => i.interview_id !== id));
       toast.success('Interview deleted');
+      fetchInterviews();
     } catch { toast.error('Failed to delete'); }
   };
 
@@ -52,7 +50,8 @@ export default function InterviewHistory() {
     if (!window.confirm('Abort this interview? It will be marked as aborted and cannot be resumed.')) return;
     try {
       await axios.post(`${API}/interviews/${id}/abort`, {}, { headers: getAuthHeaders(), withCredentials: true });
-      setInterviews(prev => prev.map(i => i.interview_id === id ? { ...i, status: 'aborted' } : i));
+      toast.success('Interview aborted');
+      fetchInterviews();
       toast.success('Interview aborted');
     } catch (err) { toast.error(err.response?.data?.detail || 'Failed to abort'); }
   };

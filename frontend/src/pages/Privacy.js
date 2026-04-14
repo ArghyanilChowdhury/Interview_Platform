@@ -40,12 +40,12 @@ export default function Privacy() {
         <Separator />
         <section className="space-y-3">
           <h2 className="text-lg font-semibold font-heading">5. Your Rights</h2>
-          <p className="text-sm text-muted-foreground leading-relaxed">You have the right to access, update, or delete your personal data at any time. You can edit your profile information or contact us at <span className="text-primary">privacy@interviewmaster.com</span> to request data deletion.</p>
+          <p className="text-sm text-muted-foreground leading-relaxed">You have the right to access, update, or delete your personal data at any time. You can edit your profile information or contact us at <span className="text-primary">arghyanilryzen@gmail.com</span> to request data deletion.</p>
         </section>
         <Separator />
         <section className="space-y-3">
           <h2 className="text-lg font-semibold font-heading">6. Contact</h2>
-          <p className="text-sm text-muted-foreground leading-relaxed">If you have questions about this Privacy Policy, please contact us at <span className="text-primary">privacy@interviewmaster.com</span>.</p>
+          <p className="text-sm text-muted-foreground leading-relaxed">If you have questions about this Privacy Policy, please contact us at <span className="text-primary">arghyanilryzen@gmail.com</span>.</p>
         </section>
       </div>
     </div>

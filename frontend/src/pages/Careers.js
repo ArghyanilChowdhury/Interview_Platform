@@ -54,7 +54,7 @@ export default function Careers() {
       <Card className="border bg-primary/5">
         <CardContent className="p-6 text-center space-y-3">
           <h3 className="font-semibold font-heading">Don't see a fit?</h3>
-          <p className="text-sm text-muted-foreground">We're always looking for talented people. Send your resume to <span className="text-primary font-medium">careers@interviewmaster.com</span></p>
+          <p className="text-sm text-muted-foreground">We're always looking for talented people. Send your resume to <span className="text-primary font-medium">arghyanilryzen@gmail.com</span></p>
         </CardContent>
       </Card>
     </div>
