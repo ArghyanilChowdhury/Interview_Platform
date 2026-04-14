@@ -148,6 +148,13 @@ export default function LiveInterview() {
     };
   }, [initMedia]);
 
+  // Re-attach stream to video when fullscreen activates (video element re-renders)
+  useEffect(() => {
+    if (isFullscreen && streamRef.current && videoRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+    }
+  }, [isFullscreen]);
+
   const toggleCamera = () => { if (streamRef.current) { const t = streamRef.current.getVideoTracks()[0]; if (t) { t.enabled = !t.enabled; setCameraOn(t.enabled); } } };
   const toggleMic = () => { if (streamRef.current) { const t = streamRef.current.getAudioTracks()[0]; if (t) { t.enabled = !t.enabled; setMicOn(t.enabled); } } };
 

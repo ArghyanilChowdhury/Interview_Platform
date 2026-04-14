@@ -107,10 +107,17 @@ export function AuthProvider({ children }) {
     tokenRef.current = null;
   };
 
+  const refreshUser = async () => {
+    try {
+      const res = await axios.get(`${API}/auth/me`, { headers: getAuthHeaders(), withCredentials: true });
+      setUser(res.data);
+    } catch {}
+  };
+
   return (
     <AuthContext.Provider value={{
       user, loading, login, register, loginWithGoogle,
-      exchangeSession, logout, checkAuth, getAuthHeaders
+      exchangeSession, logout, checkAuth, getAuthHeaders, refreshUser
     }}>
       {children}
     </AuthContext.Provider>

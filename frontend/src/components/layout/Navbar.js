@@ -81,7 +81,7 @@ export default function Navbar() {
                   <Button variant="ghost" size="sm" className="gap-2" data-testid="user-menu-trigger">
                     <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center">
                       {user.picture ? (
-                        <img src={user.picture} alt="" className="w-7 h-7 rounded-full object-cover" />
+                        <img src={user.picture.startsWith('http') ? user.picture : `${process.env.REACT_APP_BACKEND_URL}${user.picture}`} alt="" className="w-7 h-7 rounded-full object-cover" />
                       ) : (
                         <User className="w-3.5 h-3.5 text-primary" />
                       )}

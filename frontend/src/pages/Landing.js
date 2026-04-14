@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import axios from 'axios';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Separator } from '../components/ui/separator';
@@ -43,22 +44,37 @@ const features = [
   },
 ];
 
-const testimonials = [
+const staticTestimonials = [
   { name: 'Priya Sharma', role: 'Software Engineer at Google', text: 'InterviewMaster helped me prepare for my Google interview in just 2 weeks. The AI-generated questions were incredibly realistic and the feedback was spot-on.', stars: 5 },
   { name: 'Rahul Patel', role: 'Frontend Developer at Amazon', text: 'The video recording feature is a game-changer. I could actually see my body language and improve my confidence before the real interview.', stars: 5 },
   { name: 'Ananya Gupta', role: 'Data Analyst at Microsoft', text: 'I loved how the questions were tailored to my resume. It felt like a real interview experience. Got placed in my dream company!', stars: 5 },
   { name: 'Vikram Singh', role: 'Backend Developer at Flipkart', text: 'The AI interviewer Sarah Mitchell felt so real! The text-to-speech feature made the practice sessions incredibly immersive.', stars: 4 },
   { name: 'Sneha Reddy', role: 'Full Stack Developer at Swiggy', text: 'Best interview prep platform I have used. The instant AI feedback helped me identify my weak areas and work on them effectively.', stars: 5 },
   { name: 'Arjun Mehta', role: 'DevOps Engineer at Razorpay', text: 'Practicing with configurable time limits helped me manage my answers better. Cleared 3 interviews back-to-back after using this!', stars: 5 },
-];export default function Landing() {
+];
+
+const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+
+export default function Landing() {
   const [carouselIndex, setCarouselIndex] = useState(0);
+  const [testimonials, setTestimonials] = useState(staticTestimonials);
   const visibleCount = typeof window !== 'undefined' && window.innerWidth >= 1024 ? 3 : typeof window !== 'undefined' && window.innerWidth >= 640 ? 2 : 1;
   const maxIndex = Math.max(0, testimonials.length - visibleCount);
 
   const nextSlide = useCallback(() => setCarouselIndex(prev => prev >= maxIndex ? 0 : prev + 1), [maxIndex]);
   const prevSlide = useCallback(() => setCarouselIndex(prev => prev <= 0 ? maxIndex : prev - 1), [maxIndex]);
 
-  // Auto-scroll
+  // Fetch real feedbacks and merge with static
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await axios.get(`${API}/feedbacks`);
+        const real = res.data.map(f => ({ name: f.name || 'Anonymous', role: 'InterviewMaster User', text: f.text, stars: f.rating }));
+        setTestimonials([...real, ...staticTestimonials]);
+      } catch { /* use static only */ }
+    })();
+  }, []);
+
   useEffect(() => {
     const timer = setInterval(nextSlide, 4000);
     return () => clearInterval(timer);

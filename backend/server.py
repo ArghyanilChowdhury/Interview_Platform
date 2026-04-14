@@ -99,6 +99,25 @@ class ResetPassword(BaseModel):
     otp: str
     new_password: str
 
+class ContactForm(BaseModel):
+    name: str
+    email: str
+    subject: str
+    message: str
+
+class FeedbackForm(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    rating: int
+    text: str
+
+class ChangeEmailRequest(BaseModel):
+    new_email: str
+
+class ChangeEmailVerify(BaseModel):
+    new_email: str
+    otp: str
+
 # ============ AUTH HELPERS ============
 
 def hash_password(password: str) -> str:
@@ -965,6 +984,193 @@ async def update_profile(data: ProfileUpdate, user: dict = Depends(get_current_u
         {"_id": 0, "password_hash": 0}
     )
     return updated_user
+
+@api_router.post("/profile/upload-picture")
+async def upload_profile_picture(
+    file: UploadFile = File(...),
+    user: dict = Depends(get_current_user)
+):
+    ext = Path(file.filename).suffix.lower()
+    if ext not in [".jpg", ".jpeg", ".png", ".webp"]:
+        raise HTTPException(status_code=400, detail="Only JPG, PNG, WEBP images are supported")
+    if file.size and file.size > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Image must be under 5MB")
+
+    filename = f"avatar_{user['user_id']}_{uuid.uuid4().hex[:6]}{ext}"
+    filepath = UPLOAD_DIR / filename
+    content = await file.read()
+    async with aiofiles.open(str(filepath), "wb") as f:
+        await f.write(content)
+
+    picture_url = f"/api/recordings/{filename}"
+    await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"picture": picture_url}})
+    return {"picture": picture_url}
+
+@api_router.post("/profile/change-email/send-otp")
+async def change_email_send_otp(data: ChangeEmailRequest, user: dict = Depends(get_current_user)):
+    existing = await db.users.find_one({"email": data.new_email}, {"_id": 0})
+    if existing:
+        raise HTTPException(status_code=400, detail="This email is already registered")
+    otp = str(random.randint(100000, 999999))
+    await db.otps.delete_many({"email": data.new_email, "purpose": "change_email"})
+    await db.otps.insert_one({
+        "email": data.new_email,
+        "user_id": user["user_id"],
+        "otp": otp,
+        "purpose": "change_email",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()
+    })
+    send_otp_email(data.new_email, otp, "verify")
+    return {"message": f"OTP sent to {data.new_email}"}
+
+@api_router.post("/profile/change-email/verify")
+async def change_email_verify(data: ChangeEmailVerify, user: dict = Depends(get_current_user)):
+    record = await db.otps.find_one({"email": data.new_email, "otp": data.otp, "purpose": "change_email", "user_id": user["user_id"]}, {"_id": 0})
+    if not record:
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+    expires_at = datetime.fromisoformat(record["expires_at"])
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="OTP expired")
+    await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"email": data.new_email}})
+    await db.otps.delete_many({"email": data.new_email, "purpose": "change_email"})
+    return {"message": "Email updated successfully", "email": data.new_email}
+
+# ============ CONTACT & FEEDBACK ROUTES ============
+
+@api_router.post("/contact")
+async def submit_contact(data: ContactForm):
+    smtp_email = os.environ.get('SMTP_EMAIL')
+    smtp_password = os.environ.get('SMTP_APP_PASSWORD')
+    if not smtp_email or not smtp_password:
+        raise HTTPException(status_code=500, detail="Email service not configured")
+
+    # Save to DB
+    await db.contacts.insert_one({
+        "name": data.name,
+        "email": data.email,
+        "subject": data.subject,
+        "message": data.message,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+
+    html_body = f"""
+    <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:32px;">
+        <h2 style="color:#1a1a1a;">New Contact Query</h2>
+        <div style="background:#f8f9fa;border-radius:8px;padding:20px;margin:16px 0;">
+            <p><strong>From:</strong> {data.name} ({data.email})</p>
+            <p><strong>Subject:</strong> {data.subject}</p>
+            <p><strong>Message:</strong></p>
+            <p style="white-space:pre-wrap;">{data.message}</p>
+        </div>
+    </div>
+    """
+    # Send to admin
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = f"Contact Query: {data.subject}"
+    msg["From"] = smtp_email
+    msg["To"] = smtp_email
+    msg.attach(MIMEText(html_body, "html"))
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(smtp_email, smtp_password)
+            server.sendmail(smtp_email, smtp_email, msg.as_string())
+    except Exception as e:
+        logger.error(f"Failed to send contact email to admin: {e}")
+
+    # Send copy to user
+    user_html = f"""
+    <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:32px;">
+        <h2 style="color:#1a1a1a;">We received your query</h2>
+        <p style="color:#666;">Hi {data.name}, thank you for reaching out. Here's a copy of your message:</p>
+        <div style="background:#f8f9fa;border-radius:8px;padding:20px;margin:16px 0;">
+            <p><strong>Subject:</strong> {data.subject}</p>
+            <p style="white-space:pre-wrap;">{data.message}</p>
+        </div>
+        <p style="color:#666;font-size:13px;">We'll get back to you as soon as possible. If your query is urgent, reply to this email at {smtp_email}.</p>
+    </div>
+    """
+    msg2 = MIMEMultipart("alternative")
+    msg2["Subject"] = f"Your query: {data.subject} — InterviewMaster"
+    msg2["From"] = smtp_email
+    msg2["To"] = data.email
+    msg2.attach(MIMEText(user_html, "html"))
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(smtp_email, smtp_password)
+            server.sendmail(smtp_email, data.email, msg2.as_string())
+    except Exception as e:
+        logger.error(f"Failed to send contact copy to user: {e}")
+
+    return {"message": "Your query has been sent. Check your email for a copy."}
+
+@api_router.post("/feedback")
+async def submit_feedback(data: FeedbackForm):
+    smtp_email = os.environ.get('SMTP_EMAIL')
+    smtp_password = os.environ.get('SMTP_APP_PASSWORD')
+
+    feedback_doc = {
+        "feedback_id": f"fb_{uuid.uuid4().hex[:10]}",
+        "name": data.name or "Anonymous",
+        "email": data.email or None,
+        "rating": data.rating,
+        "text": data.text,
+        "approved": True,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.feedbacks.insert_one(feedback_doc)
+
+    # Email to admin
+    if smtp_email and smtp_password:
+        html = f"""
+        <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:32px;">
+            <h2>New Feedback ({data.rating}/5 stars)</h2>
+            <p><strong>From:</strong> {data.name or 'Anonymous'} {f'({data.email})' if data.email else ''}</p>
+            <p style="background:#f8f9fa;padding:16px;border-radius:8px;">{data.text}</p>
+        </div>
+        """
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = f"New Feedback: {data.rating}/5 stars"
+        msg["From"] = smtp_email
+        msg["To"] = smtp_email
+        msg.attach(MIMEText(html, "html"))
+        try:
+            with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+                server.login(smtp_email, smtp_password)
+                server.sendmail(smtp_email, smtp_email, msg.as_string())
+        except Exception as e:
+            logger.error(f"Failed to send feedback email: {e}")
+
+        # Copy to user if email provided
+        if data.email:
+            user_html = f"""
+            <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:32px;">
+                <h2>Thank you for your feedback!</h2>
+                <p>Hi {data.name or 'there'}, we appreciate your {data.rating}-star review.</p>
+                <p style="background:#f8f9fa;padding:16px;border-radius:8px;">"{data.text}"</p>
+                <p style="color:#666;font-size:13px;">Your feedback helps us improve. Thank you for using InterviewMaster!</p>
+            </div>
+            """
+            msg2 = MIMEMultipart("alternative")
+            msg2["Subject"] = "Thank you for your feedback — InterviewMaster"
+            msg2["From"] = smtp_email
+            msg2["To"] = data.email
+            msg2.attach(MIMEText(user_html, "html"))
+            try:
+                with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+                    server.login(smtp_email, smtp_password)
+                    server.sendmail(smtp_email, data.email, msg2.as_string())
+            except Exception as e:
+                logger.error(f"Failed to send feedback copy to user: {e}")
+
+    return {"message": "Thank you for your feedback!", "feedback_id": feedback_doc["feedback_id"]}
+
+@api_router.get("/feedbacks")
+async def get_feedbacks():
+    cursor = db.feedbacks.find({"approved": True}, {"_id": 0}).sort("created_at", -1).limit(20)
+    return await cursor.to_list(length=20)
 
 # ============ HEALTH CHECK ============
 
