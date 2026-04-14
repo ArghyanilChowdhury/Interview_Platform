@@ -54,6 +54,15 @@ export default function Dashboard() {
     } catch { toast.error('Failed to delete'); }
   };
 
+  const sendFeedbackEmail = async (id) => {
+    try {
+      await axios.post(`${API}/interviews/${id}/send-feedback`, {}, { headers: getAuthHeaders(), withCredentials: true });
+      toast.success('Feedback sent to your email!');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to send feedback');
+    }
+  };
+
   const abortInterview = async (id) => {
     if (!window.confirm('Abort this interview?')) return;
     try {
@@ -244,7 +253,7 @@ export default function Dashboard() {
                             </DropdownMenuItem>
                           )}
                           {interview.status === 'completed' && (
-                            <DropdownMenuItem onClick={() => toast.success(`Feedback sent to ${user?.email}!`)}>
+                            <DropdownMenuItem onClick={() => sendFeedbackEmail(interview.interview_id)}>
                               <Mail className="w-4 h-4 mr-2" /> Send Feedback to Email
                             </DropdownMenuItem>
                           )}

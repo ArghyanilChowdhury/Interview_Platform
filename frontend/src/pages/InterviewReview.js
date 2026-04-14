@@ -49,12 +49,14 @@ export default function InterviewReview() {
     })();
   }, [interviewId, getAuthHeaders, navigate]);
 
-  const sendToEmail = () => {
+  const sendToEmail = async () => {
     setSendingEmail(true);
-    setTimeout(() => {
-      toast.success(`Feedback sent to ${user?.email || 'your email'}!`);
-      setSendingEmail(false);
-    }, 1500);
+    try {
+      await axios.post(`${API}/interviews/${interviewId}/send-feedback`, {}, { headers: getAuthHeaders(), withCredentials: true });
+      toast.success('Feedback sent to your email!');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to send feedback email');
+    } finally { setSendingEmail(false); }
   };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center" data-testid="review-loading"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>;

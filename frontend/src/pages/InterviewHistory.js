@@ -56,9 +56,14 @@ export default function InterviewHistory() {
     } catch (err) { toast.error(err.response?.data?.detail || 'Failed to abort'); }
   };
 
-  const sendFeedbackEmail = (e, interview) => {
+  const sendFeedbackEmail = async (e, interview) => {
     e.stopPropagation();
-    toast.success(`Feedback for "${interview.type === 'role' ? interview.role : 'Resume-Based'}" sent to ${user?.email || 'your email'}!`);
+    try {
+      await axios.post(`${API}/interviews/${interview.interview_id}/send-feedback`, {}, { headers: getAuthHeaders(), withCredentials: true });
+      toast.success('Feedback sent to your email!');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to send feedback');
+    }
   };
 
   const filtered = filter === 'all' ? interviews : interviews.filter(i => i.status === filter);
