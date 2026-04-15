@@ -745,26 +745,40 @@ async def upload_recording(
 
     recording_url = f"/api/recordings/{filename}"
 
-    # Transcribe with Whisper for accurate transcript
-    whisper_transcript = None
+    # Run Whisper transcription in background (non-blocking)
+    import asyncio
+    asyncio.create_task(
+        _transcribe_background(str(file_path), filename, interview_id, int(question_index))
+    )
+
+    return {"recording_path": recording_url, "filename": filename}
+
+
+async def _transcribe_background(file_path: str, filename: str, interview_id: str, question_index: int):
+    """Background task: transcribe with Whisper and update the DB."""
     try:
         from emergentintegrations.llm.openai import OpenAISpeechToText
         api_key = os.environ.get('EMERGENT_LLM_KEY')
-        if api_key and len(content) > 0:
-            stt = OpenAISpeechToText(api_key=api_key)
-            with open(str(file_path), "rb") as audio_file:
-                response = await stt.transcribe(
-                    file=audio_file,
-                    model="whisper-1",
-                    language="en",
-                    response_format="json"
+        if not api_key:
+            return
+        stt = OpenAISpeechToText(api_key=api_key)
+        with open(file_path, "rb") as audio_file:
+            response = await stt.transcribe(
+                file=audio_file,
+                model="whisper-1",
+                language="en",
+                response_format="json"
+            )
+            transcript = response.text if response and response.text else None
+            if transcript:
+                # Update the response transcript in the interview document
+                await db.interviews.update_one(
+                    {"interview_id": interview_id, "responses.question_index": question_index},
+                    {"$set": {"responses.$.transcript": transcript}}
                 )
-                whisper_transcript = response.text if response and response.text else None
-                logger.info(f"Whisper transcription successful for {filename}")
+                logger.info(f"Whisper transcription done for {filename}: {transcript[:80]}...")
     except Exception as e:
-        logger.error(f"Whisper transcription error: {e}")
-
-    return {"recording_path": recording_url, "filename": filename, "transcript": whisper_transcript}
+        logger.error(f"Background Whisper transcription error for {filename}: {e}")
 
 @api_router.get("/recordings/{filename}")
 async def serve_recording(filename: str):

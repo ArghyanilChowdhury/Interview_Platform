@@ -284,7 +284,6 @@ export default function LiveInterview() {
     const elapsed = Math.floor((Date.now() - recordStartTimeRef.current) / 1000);
     try {
       let recordingPath = null;
-      let whisperTranscript = null;
       if (chunksRef.current.length > 0) {
         const blob = new Blob(chunksRef.current, { type: 'video/webm' });
         const formData = new FormData();
@@ -293,11 +292,10 @@ export default function LiveInterview() {
         formData.append('question_index', currentIndex.toString());
         const uploadRes = await axios.post(`${API}/recordings/upload`, formData, { headers: { ...getAuthHeaders(), 'Content-Type': 'multipart/form-data' }, withCredentials: true });
         recordingPath = uploadRes.data.recording_path;
-        whisperTranscript = uploadRes.data.transcript;
       }
       await axios.post(`${API}/interviews/${interviewId}/responses`, {
         question_index: currentIndex,
-        transcript: whisperTranscript || 'Transcript processing...',
+        transcript: 'Transcribing...',
         recording_path: recordingPath,
         duration: elapsed
       }, { headers: getAuthHeaders(), withCredentials: true });
