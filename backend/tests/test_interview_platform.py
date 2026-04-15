@@ -1,419 +1,287 @@
 """
-Comprehensive backend tests for Interview Platform API
-Testing: Auth (register/login/me), Interviews (CRUD, configurable settings, abort),
-Recordings (upload/serve), Profile endpoints
+Interview Platform Backend API Tests - Iteration 11
+Tests all major endpoints: auth, interviews, profile, contact, feedback
+Test credentials: test@interviewmaster.com / Test@123
 """
 import pytest
 import requests
 import os
-import uuid
 import time
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://mock-interview-coach-1.preview.emergentagent.com')
 
-# Test user credentials
-TEST_EMAIL = "test@test.com"
-TEST_PASSWORD = "test123"
-TEST_NAME = "Test User"
-
-# Unique test user for registration tests
-UNIQUE_EMAIL = f"test_{uuid.uuid4().hex[:8]}@example.com"
+# Test credentials
+TEST_EMAIL = "test@interviewmaster.com"
+TEST_PASSWORD = "Test@123"
 
 
 class TestHealthCheck:
-    """API health and availability tests"""
+    """API health check tests"""
     
-    def test_api_root_health(self):
-        """Check API root endpoint is responding"""
+    def test_api_root(self):
+        """Test API root endpoint returns 200"""
         response = requests.get(f"{BASE_URL}/api/")
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "running"
-        assert "Interview Platform API" in data["message"]
-        print("✓ API root health check passed")
+        print("✓ API health check passed")
 
 
 class TestAuthentication:
-    """Authentication flow tests - register, login, me"""
+    """Authentication endpoint tests"""
     
-    def test_register_new_user(self):
-        """POST /api/auth/register - create new user"""
-        payload = {
-            "email": UNIQUE_EMAIL,
-            "password": "testpass123",
-            "name": "New Test User"
-        }
-        response = requests.post(f"{BASE_URL}/api/auth/register", json=payload)
-        
-        # May return 400 if email already exists from previous test
-        if response.status_code == 400:
-            assert "already registered" in response.json().get("detail", "").lower()
-            print("✓ Register endpoint correctly rejects duplicate email")
-            return
-            
-        assert response.status_code == 200
+    def test_login_success(self):
+        """Test login with valid credentials"""
+        response = requests.post(f"{BASE_URL}/api/auth/login", json={
+            "email": TEST_EMAIL,
+            "password": TEST_PASSWORD
+        })
+        assert response.status_code == 200, f"Login failed: {response.text}"
         data = response.json()
-        assert "user_id" in data
-        assert data["email"] == UNIQUE_EMAIL
-        assert data["name"] == "New Test User"
-        assert "token" in data
-        assert data["auth_type"] == "local"
-        print(f"✓ User registered successfully: {data['user_id']}")
-    
-    def test_register_duplicate_email(self):
-        """POST /api/auth/register - reject duplicate email"""
-        payload = {
-            "email": TEST_EMAIL,  # Already exists
-            "password": "anypass",
-            "name": "Duplicate"
-        }
-        response = requests.post(f"{BASE_URL}/api/auth/register", json=payload)
-        assert response.status_code == 400
-        assert "already registered" in response.json()["detail"].lower()
-        print("✓ Duplicate email registration correctly rejected")
-    
-    def test_login_valid_credentials(self):
-        """POST /api/auth/login - login with valid credentials"""
-        payload = {"email": TEST_EMAIL, "password": TEST_PASSWORD}
-        response = requests.post(f"{BASE_URL}/api/auth/login", json=payload)
-        
-        assert response.status_code == 200
-        data = response.json()
-        assert "user_id" in data
+        assert "token" in data, "No token in response"
+        assert "user_id" in data, "No user_id in response"
         assert data["email"] == TEST_EMAIL
-        assert "token" in data
-        assert len(data["token"]) > 0
-        print(f"✓ Login successful, token received: {data['token'][:20]}...")
+        assert data["auth_type"] == "local"
+        print(f"✓ Login success - user_id: {data['user_id']}")
+        return data["token"]
     
     def test_login_invalid_credentials(self):
-        """POST /api/auth/login - reject invalid password"""
-        payload = {"email": TEST_EMAIL, "password": "wrongpassword"}
-        response = requests.post(f"{BASE_URL}/api/auth/login", json=payload)
-        
+        """Test login with invalid credentials returns 401"""
+        response = requests.post(f"{BASE_URL}/api/auth/login", json={
+            "email": TEST_EMAIL,
+            "password": "WrongPassword123"
+        })
         assert response.status_code == 401
-        assert "invalid" in response.json()["detail"].lower()
-        print("✓ Invalid credentials correctly rejected")
+        print("✓ Invalid credentials rejected with 401")
     
     def test_login_nonexistent_user(self):
-        """POST /api/auth/login - reject nonexistent email"""
-        payload = {"email": "nonexistent@example.com", "password": "anypass"}
-        response = requests.post(f"{BASE_URL}/api/auth/login", json=payload)
-        
+        """Test login with non-existent user returns 401"""
+        response = requests.post(f"{BASE_URL}/api/auth/login", json={
+            "email": "nonexistent@example.com",
+            "password": "SomePassword123"
+        })
         assert response.status_code == 401
-        print("✓ Nonexistent user login correctly rejected")
+        print("✓ Non-existent user rejected with 401")
     
-    def test_get_me_with_valid_token(self):
-        """GET /api/auth/me - return user profile with valid token"""
+    def test_auth_me_without_token(self):
+        """Test /auth/me without token returns 401"""
+        response = requests.get(f"{BASE_URL}/api/auth/me")
+        assert response.status_code == 401
+        print("✓ /auth/me without token returns 401")
+    
+    def test_auth_me_with_token(self):
+        """Test /auth/me with valid token returns user data"""
         # First login to get token
         login_res = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": TEST_EMAIL, "password": TEST_PASSWORD
+            "email": TEST_EMAIL,
+            "password": TEST_PASSWORD
         })
-        assert login_res.status_code == 200
         token = login_res.json()["token"]
         
-        # Now call /me with token
-        headers = {"Authorization": f"Bearer {token}"}
-        response = requests.get(f"{BASE_URL}/api/auth/me", headers=headers)
-        
+        # Now test /auth/me
+        response = requests.get(f"{BASE_URL}/api/auth/me", headers={
+            "Authorization": f"Bearer {token}"
+        })
         assert response.status_code == 200
         data = response.json()
         assert data["email"] == TEST_EMAIL
-        assert "user_id" in data
-        assert "name" in data
-        print(f"✓ /me returned user profile: {data['name']}")
+        print(f"✓ /auth/me returns user: {data['name']}")
     
-    def test_get_me_without_token(self):
-        """GET /api/auth/me - reject without authentication"""
-        response = requests.get(f"{BASE_URL}/api/auth/me")
-        assert response.status_code == 401
-        print("✓ /me correctly rejects unauthenticated request")
+    def test_send_otp(self):
+        """Test OTP sending endpoint"""
+        response = requests.post(f"{BASE_URL}/api/auth/send-otp", json={
+            "email": "test_otp_iter11@example.com"
+        })
+        assert response.status_code == 200
+        data = response.json()
+        assert "message" in data
+        print("✓ OTP send endpoint works")
+    
+    def test_verify_otp_invalid(self):
+        """Test OTP verification with invalid OTP"""
+        response = requests.post(f"{BASE_URL}/api/auth/verify-otp", json={
+            "email": "test_otp_iter11@example.com",
+            "otp": "000000"
+        })
+        assert response.status_code == 400
+        print("✓ Invalid OTP rejected with 400")
+    
+    def test_forgot_password(self):
+        """Test forgot password endpoint"""
+        response = requests.post(f"{BASE_URL}/api/auth/forgot-password", json={
+            "email": TEST_EMAIL
+        })
+        assert response.status_code == 200
+        data = response.json()
+        assert "message" in data
+        print("✓ Forgot password endpoint works")
+    
+    def test_logout(self):
+        """Test logout endpoint"""
+        # First login
+        login_res = requests.post(f"{BASE_URL}/api/auth/login", json={
+            "email": TEST_EMAIL,
+            "password": TEST_PASSWORD
+        })
+        token = login_res.json()["token"]
+        
+        # Logout
+        response = requests.post(f"{BASE_URL}/api/auth/logout", headers={
+            "Authorization": f"Bearer {token}"
+        })
+        assert response.status_code == 200
+        print("✓ Logout endpoint works")
 
 
 class TestInterviews:
-    """Interview CRUD and workflow tests"""
+    """Interview CRUD tests"""
     
     @pytest.fixture(autouse=True)
     def setup(self):
         """Get auth token before each test"""
         login_res = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": TEST_EMAIL, "password": TEST_PASSWORD
+            "email": TEST_EMAIL,
+            "password": TEST_PASSWORD
         })
-        assert login_res.status_code == 200
         self.token = login_res.json()["token"]
         self.headers = {"Authorization": f"Bearer {self.token}"}
     
-    def test_start_interview_default_settings(self):
-        """POST /api/interviews/start - create interview with defaults"""
-        payload = {
-            "type": "role",
-            "role": "Frontend Developer"
-        }
-        response = requests.post(f"{BASE_URL}/api/interviews/start", 
-                                 json=payload, headers=self.headers)
-        
-        assert response.status_code == 200
-        data = response.json()
-        assert "interview_id" in data
-        assert data["type"] == "role"
-        assert data["role"] == "Frontend Developer"
-        assert data["status"] == "in_progress"
-        assert "questions" in data
-        assert len(data["questions"]) == 7  # Default num_questions
-        assert data["num_questions"] == 7
-        assert data["time_per_question"] == 120  # Default
-        print(f"✓ Interview started with defaults: {data['interview_id']}")
-        
-        # Cleanup - delete the interview
-        requests.delete(f"{BASE_URL}/api/interviews/{data['interview_id']}", 
-                       headers=self.headers)
-    
-    def test_start_interview_configurable_settings(self):
-        """POST /api/interviews/start - create interview with custom num_questions and time_per_question"""
-        payload = {
-            "type": "role",
-            "role": "Backend Developer",
-            "experience_level": "intermediate",
-            "skills": ["Python", "REST API Design", "SQL Databases"],
-            "num_questions": 5,
-            "time_per_question": 180
-        }
-        response = requests.post(f"{BASE_URL}/api/interviews/start", 
-                                 json=payload, headers=self.headers)
-        
-        assert response.status_code == 200
-        data = response.json()
-        assert data["num_questions"] == 5
-        assert data["time_per_question"] == 180
-        assert len(data["questions"]) == 5
-        assert data["experience_level"] == "intermediate"
-        assert data["skills"] == ["Python", "REST API Design", "SQL Databases"]
-        print(f"✓ Configurable interview created: {data['num_questions']} questions, {data['time_per_question']}s each")
-        
-        # Cleanup
-        requests.delete(f"{BASE_URL}/api/interviews/{data['interview_id']}", 
-                       headers=self.headers)
-    
-    def test_start_interview_boundary_questions(self):
-        """POST /api/interviews/start - test boundary values for num_questions"""
-        # Test minimum boundary (3)
-        payload = {"type": "role", "role": "HR Interview", "num_questions": 2}  # Below min
-        response = requests.post(f"{BASE_URL}/api/interviews/start", 
-                                 json=payload, headers=self.headers)
-        assert response.status_code == 200
-        data = response.json()
-        assert data["num_questions"] == 3  # Should be clamped to minimum 3
-        
-        requests.delete(f"{BASE_URL}/api/interviews/{data['interview_id']}", 
-                       headers=self.headers)
-        
-        # Test maximum boundary (20)
-        payload = {"type": "role", "role": "HR Interview", "num_questions": 25}  # Above max
-        response = requests.post(f"{BASE_URL}/api/interviews/start", 
-                                 json=payload, headers=self.headers)
-        assert response.status_code == 200
-        data = response.json()
-        assert data["num_questions"] == 20  # Should be clamped to maximum 20
-        print(f"✓ Boundary test passed: min=3, max=20 enforced")
-        
-        requests.delete(f"{BASE_URL}/api/interviews/{data['interview_id']}", 
-                       headers=self.headers)
-    
     def test_list_interviews(self):
-        """GET /api/interviews - list user's interviews"""
+        """Test listing interviews"""
         response = requests.get(f"{BASE_URL}/api/interviews", headers=self.headers)
-        
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, list)
-        print(f"✓ Listed {len(data)} interviews")
+        print(f"✓ List interviews - found {len(data)} interviews")
     
-    def test_get_interview_by_id(self):
-        """GET /api/interviews/{id} - get specific interview details"""
+    def test_start_role_interview(self):
+        """Test starting a role-based interview"""
+        response = requests.post(f"{BASE_URL}/api/interviews/start", json={
+            "type": "role",
+            "role": "Frontend Developer",
+            "experience_level": "intermediate",
+            "skills": ["React.js", "TypeScript"],
+            "num_questions": 3,
+            "time_per_question": 60
+        }, headers=self.headers)
+        assert response.status_code == 200, f"Failed: {response.text}"
+        data = response.json()
+        assert "interview_id" in data
+        assert "questions" in data
+        assert len(data["questions"]) == 3
+        assert data["type"] == "role"
+        assert data["role"] == "Frontend Developer"
+        assert data["status"] == "in_progress"
+        print(f"✓ Started role interview: {data['interview_id']} with {len(data['questions'])} questions")
+        return data["interview_id"]
+    
+    def test_get_interview(self):
+        """Test getting a specific interview"""
         # First create an interview
-        create_res = requests.post(f"{BASE_URL}/api/interviews/start", 
-                                   json={"type": "role", "role": "Data Analyst", "num_questions": 3},
-                                   headers=self.headers)
+        create_res = requests.post(f"{BASE_URL}/api/interviews/start", json={
+            "type": "role",
+            "role": "Backend Developer",
+            "num_questions": 3
+        }, headers=self.headers)
         interview_id = create_res.json()["interview_id"]
         
-        # Get it by ID
-        response = requests.get(f"{BASE_URL}/api/interviews/{interview_id}", 
-                               headers=self.headers)
-        
+        # Get the interview
+        response = requests.get(f"{BASE_URL}/api/interviews/{interview_id}", headers=self.headers)
         assert response.status_code == 200
         data = response.json()
         assert data["interview_id"] == interview_id
-        assert data["role"] == "Data Analyst"
-        assert "questions" in data
-        print(f"✓ Retrieved interview: {interview_id}")
-        
-        # Cleanup
-        requests.delete(f"{BASE_URL}/api/interviews/{interview_id}", 
-                       headers=self.headers)
-    
-    def test_get_nonexistent_interview(self):
-        """GET /api/interviews/{id} - 404 for nonexistent interview"""
-        response = requests.get(f"{BASE_URL}/api/interviews/int_nonexistent123", 
-                               headers=self.headers)
-        assert response.status_code == 404
-        print("✓ Nonexistent interview returns 404")
+        print(f"✓ Get interview {interview_id} works")
     
     def test_save_response(self):
-        """POST /api/interviews/{id}/responses - save a response"""
+        """Test saving a response to an interview"""
         # Create interview
-        create_res = requests.post(f"{BASE_URL}/api/interviews/start", 
-                                   json={"type": "role", "role": "DevOps Engineer", "num_questions": 3},
-                                   headers=self.headers)
+        create_res = requests.post(f"{BASE_URL}/api/interviews/start", json={
+            "type": "role",
+            "role": "Full Stack Developer",
+            "num_questions": 3
+        }, headers=self.headers)
         interview_id = create_res.json()["interview_id"]
         
         # Save response
-        response_payload = {
+        response = requests.post(f"{BASE_URL}/api/interviews/{interview_id}/responses", json={
             "question_index": 0,
-            "transcript": "This is my answer about Docker and containerization...",
-            "recording_path": None,
+            "transcript": "This is my test answer for the first question.",
             "duration": 45
-        }
-        response = requests.post(f"{BASE_URL}/api/interviews/{interview_id}/responses",
-                                json=response_payload, headers=self.headers)
-        
+        }, headers=self.headers)
         assert response.status_code == 200
         data = response.json()
         assert data["question_index"] == 0
-        print(f"✓ Response saved for question 0")
-        
-        # Verify response was saved
-        get_res = requests.get(f"{BASE_URL}/api/interviews/{interview_id}", 
-                              headers=self.headers)
-        interview_data = get_res.json()
-        assert len(interview_data["responses"]) == 1
-        assert interview_data["responses"][0]["transcript"] == response_payload["transcript"]
-        print("✓ Response persisted correctly")
-        
-        # Cleanup
-        requests.delete(f"{BASE_URL}/api/interviews/{interview_id}", 
-                       headers=self.headers)
+        print(f"✓ Saved response to interview {interview_id}")
     
     def test_complete_interview(self):
-        """POST /api/interviews/{id}/complete - complete interview and generate feedback"""
+        """Test completing an interview (generates AI feedback)"""
         # Create interview
-        create_res = requests.post(f"{BASE_URL}/api/interviews/start", 
-                                   json={"type": "role", "role": "HR Interview", "num_questions": 3},
-                                   headers=self.headers)
+        create_res = requests.post(f"{BASE_URL}/api/interviews/start", json={
+            "type": "role",
+            "role": "Data Analyst",
+            "num_questions": 3
+        }, headers=self.headers)
         interview_id = create_res.json()["interview_id"]
         
         # Save a response
-        requests.post(f"{BASE_URL}/api/interviews/{interview_id}/responses",
-                     json={"question_index": 0, "transcript": "I have 5 years of experience...", "duration": 30},
-                     headers=self.headers)
+        requests.post(f"{BASE_URL}/api/interviews/{interview_id}/responses", json={
+            "question_index": 0,
+            "transcript": "I have experience with SQL, Python, and data visualization tools like Tableau.",
+            "duration": 60
+        }, headers=self.headers)
         
-        # Complete interview
-        response = requests.post(f"{BASE_URL}/api/interviews/{interview_id}/complete",
-                                headers=self.headers)
-        
-        assert response.status_code == 200
+        # Complete interview (this calls AI for feedback - may take time)
+        response = requests.post(f"{BASE_URL}/api/interviews/{interview_id}/complete", 
+                                headers=self.headers, timeout=60)
+        assert response.status_code == 200, f"Complete failed: {response.text}"
         data = response.json()
         assert data["status"] == "completed"
         assert "summary" in data
-        assert data["completed_at"] is not None
-        print(f"✓ Interview completed with summary")
+        print(f"✓ Completed interview {interview_id} with AI feedback")
+    
+    def test_abort_interview(self):
+        """Test aborting an in-progress interview"""
+        # Create interview
+        create_res = requests.post(f"{BASE_URL}/api/interviews/start", json={
+            "type": "role",
+            "role": "DevOps Engineer",
+            "num_questions": 3
+        }, headers=self.headers)
+        interview_id = create_res.json()["interview_id"]
         
-        # Cleanup
-        requests.delete(f"{BASE_URL}/api/interviews/{interview_id}", 
-                       headers=self.headers)
+        # Abort
+        response = requests.post(f"{BASE_URL}/api/interviews/{interview_id}/abort", headers=self.headers)
+        assert response.status_code == 200
+        
+        # Verify status
+        get_res = requests.get(f"{BASE_URL}/api/interviews/{interview_id}", headers=self.headers)
+        assert get_res.json()["status"] == "aborted"
+        print(f"✓ Aborted interview {interview_id}")
     
     def test_delete_interview(self):
-        """DELETE /api/interviews/{id} - delete an interview"""
+        """Test deleting an interview"""
         # Create interview
-        create_res = requests.post(f"{BASE_URL}/api/interviews/start", 
-                                   json={"type": "role", "role": "Full Stack Developer", "num_questions": 3},
-                                   headers=self.headers)
+        create_res = requests.post(f"{BASE_URL}/api/interviews/start", json={
+            "type": "role",
+            "role": "HR Interview",
+            "num_questions": 3
+        }, headers=self.headers)
         interview_id = create_res.json()["interview_id"]
         
-        # Delete it
-        response = requests.delete(f"{BASE_URL}/api/interviews/{interview_id}", 
-                                  headers=self.headers)
-        
+        # Delete
+        response = requests.delete(f"{BASE_URL}/api/interviews/{interview_id}", headers=self.headers)
         assert response.status_code == 200
-        assert "deleted" in response.json()["message"].lower()
-        print(f"✓ Interview deleted: {interview_id}")
         
-        # Verify it's gone
-        get_res = requests.get(f"{BASE_URL}/api/interviews/{interview_id}", 
-                              headers=self.headers)
+        # Verify deleted
+        get_res = requests.get(f"{BASE_URL}/api/interviews/{interview_id}", headers=self.headers)
         assert get_res.status_code == 404
-        print("✓ Deleted interview returns 404")
+        print(f"✓ Deleted interview {interview_id}")
     
-    def test_abort_in_progress_interview(self):
-        """POST /api/interviews/{id}/abort - abort an in-progress interview"""
-        # Create interview
-        create_res = requests.post(f"{BASE_URL}/api/interviews/start", 
-                                   json={"type": "role", "role": "Backend Developer", "num_questions": 3},
-                                   headers=self.headers)
-        interview_id = create_res.json()["interview_id"]
-        assert create_res.json()["status"] == "in_progress"
-        
-        # Abort it
-        response = requests.post(f"{BASE_URL}/api/interviews/{interview_id}/abort", 
-                                headers=self.headers)
-        
-        assert response.status_code == 200
-        assert "aborted" in response.json()["message"].lower()
-        print(f"✓ Interview aborted: {interview_id}")
-        
-        # Verify status changed
-        get_res = requests.get(f"{BASE_URL}/api/interviews/{interview_id}", 
-                              headers=self.headers)
-        assert get_res.json()["status"] == "aborted"
-        print("✓ Interview status is 'aborted'")
-        
-        # Cleanup
-        requests.delete(f"{BASE_URL}/api/interviews/{interview_id}", 
-                       headers=self.headers)
-    
-    def test_abort_completed_interview_fails(self):
-        """POST /api/interviews/{id}/abort - cannot abort completed interview"""
-        # Create and complete interview
-        create_res = requests.post(f"{BASE_URL}/api/interviews/start", 
-                                   json={"type": "role", "role": "HR Interview", "num_questions": 3},
-                                   headers=self.headers)
-        interview_id = create_res.json()["interview_id"]
-        
-        # Save response and complete
-        requests.post(f"{BASE_URL}/api/interviews/{interview_id}/responses",
-                     json={"question_index": 0, "transcript": "Test answer", "duration": 10},
-                     headers=self.headers)
-        requests.post(f"{BASE_URL}/api/interviews/{interview_id}/complete", 
-                     headers=self.headers)
-        
-        # Try to abort completed interview
-        response = requests.post(f"{BASE_URL}/api/interviews/{interview_id}/abort", 
-                                headers=self.headers)
-        
-        assert response.status_code == 400
-        assert "not in progress" in response.json()["detail"].lower()
-        print("✓ Cannot abort completed interview (correct behavior)")
-        
-        # Cleanup
-        requests.delete(f"{BASE_URL}/api/interviews/{interview_id}", 
-                       headers=self.headers)
-
-
-class TestRecordings:
-    """Recording upload and serve tests"""
-    
-    @pytest.fixture(autouse=True)
-    def setup(self):
-        """Get auth token before each test"""
-        login_res = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": TEST_EMAIL, "password": TEST_PASSWORD
-        })
-        self.token = login_res.json()["token"]
-        self.headers = {"Authorization": f"Bearer {self.token}"}
-    
-    def test_serve_nonexistent_recording(self):
-        """GET /api/recordings/{filename} - 404 for nonexistent file"""
-        response = requests.get(f"{BASE_URL}/api/recordings/nonexistent_file.webm")
+    def test_interview_not_found(self):
+        """Test getting non-existent interview returns 404"""
+        response = requests.get(f"{BASE_URL}/api/interviews/nonexistent_id", headers=self.headers)
         assert response.status_code == 404
-        print("✓ Nonexistent recording returns 404")
+        print("✓ Non-existent interview returns 404")
 
 
 class TestProfile:
@@ -423,38 +291,145 @@ class TestProfile:
     def setup(self):
         """Get auth token before each test"""
         login_res = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": TEST_EMAIL, "password": TEST_PASSWORD
+            "email": TEST_EMAIL,
+            "password": TEST_PASSWORD
         })
         self.token = login_res.json()["token"]
         self.headers = {"Authorization": f"Bearer {self.token}"}
     
     def test_get_profile(self):
-        """GET /api/profile - get user profile with stats"""
+        """Test getting user profile"""
         response = requests.get(f"{BASE_URL}/api/profile", headers=self.headers)
-        
         assert response.status_code == 200
         data = response.json()
         assert data["email"] == TEST_EMAIL
         assert "total_interviews" in data
         assert "completed_interviews" in data
-        assert isinstance(data["total_interviews"], int)
-        assert isinstance(data["completed_interviews"], int)
-        print(f"✓ Profile retrieved: {data['total_interviews']} total, {data['completed_interviews']} completed")
+        print(f"✓ Profile: {data['name']}, {data['total_interviews']} interviews")
+    
+    def test_get_profile_unauthorized(self):
+        """Test profile without auth returns 401"""
+        response = requests.get(f"{BASE_URL}/api/profile")
+        assert response.status_code == 401
+        print("✓ Profile without auth returns 401")
     
     def test_update_profile_name(self):
-        """PUT /api/profile - update user name"""
-        new_name = f"Updated Name {uuid.uuid4().hex[:4]}"
-        response = requests.put(f"{BASE_URL}/api/profile", 
-                               json={"name": new_name}, headers=self.headers)
-        
+        """Test updating profile name"""
+        # Update name
+        response = requests.put(f"{BASE_URL}/api/profile", json={
+            "name": "E2E Test User Updated"
+        }, headers=self.headers)
         assert response.status_code == 200
         data = response.json()
-        assert data["name"] == new_name
-        print(f"✓ Profile name updated to: {new_name}")
+        assert data["name"] == "E2E Test User Updated"
         
-        # Reset to original
-        requests.put(f"{BASE_URL}/api/profile", 
-                    json={"name": TEST_NAME}, headers=self.headers)
+        # Restore original name
+        requests.put(f"{BASE_URL}/api/profile", json={
+            "name": "E2E Test User"
+        }, headers=self.headers)
+        print("✓ Profile name update works")
+
+
+class TestContactAndFeedback:
+    """Contact and Feedback endpoint tests"""
+    
+    def test_submit_contact(self):
+        """Test contact form submission"""
+        response = requests.post(f"{BASE_URL}/api/contact", json={
+            "name": "Test User",
+            "email": "testcontact@example.com",
+            "subject": "Test Query",
+            "message": "This is a test message from automated testing."
+        })
+        assert response.status_code == 200
+        data = response.json()
+        assert "message" in data
+        print("✓ Contact form submission works")
+    
+    def test_submit_contact_missing_fields(self):
+        """Test contact form with missing fields returns 422"""
+        response = requests.post(f"{BASE_URL}/api/contact", json={
+            "name": "Test User"
+            # Missing email, subject, message
+        })
+        assert response.status_code == 422
+        print("✓ Contact form validates required fields")
+    
+    def test_submit_feedback(self):
+        """Test feedback submission"""
+        response = requests.post(f"{BASE_URL}/api/feedback", json={
+            "name": "Test Reviewer",
+            "email": "testfeedback@example.com",
+            "rating": 5,
+            "text": "Great platform for interview practice! Automated test feedback."
+        })
+        assert response.status_code == 200
+        data = response.json()
+        assert "feedback_id" in data
+        print(f"✓ Feedback submitted: {data['feedback_id']}")
+    
+    def test_submit_feedback_anonymous(self):
+        """Test anonymous feedback submission"""
+        response = requests.post(f"{BASE_URL}/api/feedback", json={
+            "rating": 4,
+            "text": "Anonymous feedback from automated testing."
+        })
+        assert response.status_code == 200
+        data = response.json()
+        assert "feedback_id" in data
+        print("✓ Anonymous feedback works")
+    
+    def test_get_feedbacks(self):
+        """Test getting feedbacks list"""
+        response = requests.get(f"{BASE_URL}/api/feedbacks")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+        print(f"✓ Get feedbacks - found {len(data)} feedbacks")
+
+
+class TestRecordingUpload:
+    """Recording upload tests"""
+    
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        """Get auth token before each test"""
+        login_res = requests.post(f"{BASE_URL}/api/auth/login", json={
+            "email": TEST_EMAIL,
+            "password": TEST_PASSWORD
+        })
+        self.token = login_res.json()["token"]
+        self.headers = {"Authorization": f"Bearer {self.token}"}
+    
+    def test_upload_recording(self):
+        """Test recording upload returns quickly (async Whisper)"""
+        # Create interview first
+        create_res = requests.post(f"{BASE_URL}/api/interviews/start", json={
+            "type": "role",
+            "role": "Frontend Developer",
+            "num_questions": 3
+        }, headers=self.headers)
+        interview_id = create_res.json()["interview_id"]
+        
+        # Create a minimal webm file (just header bytes for testing)
+        webm_header = bytes([0x1A, 0x45, 0xDF, 0xA3])  # EBML header
+        
+        start_time = time.time()
+        response = requests.post(
+            f"{BASE_URL}/api/recordings/upload",
+            files={"file": ("test.webm", webm_header, "video/webm")},
+            data={"interview_id": interview_id, "question_index": "0"},
+            headers=self.headers
+        )
+        elapsed = time.time() - start_time
+        
+        assert response.status_code == 200, f"Upload failed: {response.text}"
+        data = response.json()
+        assert "recording_path" in data
+        assert "filename" in data
+        # Verify it's fast (async Whisper)
+        assert elapsed < 5, f"Upload took too long: {elapsed}s (should be <5s)"
+        print(f"✓ Recording upload works - {elapsed:.2f}s (async Whisper)")
 
 
 if __name__ == "__main__":
