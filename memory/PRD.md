@@ -57,4 +57,8 @@ Build a modern, responsive Interview Practice Platform where users can sign up, 
 - Frontend: All features verified working (100%)
 - Fixed: Whisper transcription file format error (pass file path instead of file object)
 - DB state: Wiped clean with 1 seeded test user (test@interviewmaster.com / Test@123)
+
+## Bug Fixes (April 15, 2026 - Post Iteration 11)
+- **Bug 1 FIXED**: Auto-submit on timer expiry was repeating the same question. Root cause: stale closure in `doStopRecording` captured by setInterval. Fix: Added `currentIndexRef` and `doStopRecordingRef` to always read current values from refs instead of stale closures.
+- **Bug 2 FIXED**: Transcript showing "Transcribing..." forever after interview completion. Root cause: `complete` endpoint overwrote entire responses array, clobbering Whisper-updated transcripts. Fix: Re-read latest responses from DB before final save + added 5-second polling in InterviewReview to auto-refresh transcripts.
 - Status: READY FOR USER FINAL QA

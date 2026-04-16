@@ -583,20 +583,43 @@ async def complete_interview(interview_id: str, user: dict = Depends(get_current
     responses = interview.get("responses", [])
     questions = interview.get("questions", [])
 
+    # Generate feedback for each response
+    feedback_updates = {}
     for resp in responses:
         idx = resp["question_index"]
-        if idx < len(questions) and resp.get("transcript"):
-            feedback = await generate_feedback(questions[idx], resp["transcript"])
-            resp["feedback"] = strip_markdown(feedback)
+        transcript = resp.get("transcript", "")
+        if idx < len(questions) and transcript and transcript != "Transcribing...":
+            feedback = await generate_feedback(questions[idx], transcript)
+            feedback_updates[idx] = strip_markdown(feedback)
 
     summary = strip_markdown(await generate_summary(questions, responses, interview.get("role", "General")))
+
+    # Re-read the interview to get the LATEST transcripts (Whisper may have updated them during feedback generation)
+    latest_interview = await db.interviews.find_one(
+        {"interview_id": interview_id},
+        {"_id": 0}
+    )
+    latest_responses = latest_interview.get("responses", []) if latest_interview else responses
+
+    # Merge feedback into the latest responses (don't overwrite Whisper-updated transcripts)
+    for resp in latest_responses:
+        idx = resp["question_index"]
+        if idx in feedback_updates:
+            resp["feedback"] = feedback_updates[idx]
+        # If transcript is still "Transcribing..." but we couldn't generate feedback, set a placeholder
+        if not resp.get("feedback"):
+            transcript = resp.get("transcript", "")
+            if transcript and transcript != "Transcribing..." and idx < len(questions):
+                # Whisper updated the transcript after our first read - generate feedback now
+                feedback = await generate_feedback(questions[idx], transcript)
+                resp["feedback"] = strip_markdown(feedback)
 
     await db.interviews.update_one(
         {"interview_id": interview_id},
         {
             "$set": {
                 "status": "completed",
-                "responses": responses,
+                "responses": latest_responses,
                 "summary": summary,
                 "completed_at": datetime.now(timezone.utc).isoformat()
             }

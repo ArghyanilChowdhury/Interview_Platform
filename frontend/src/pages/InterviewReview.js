@@ -49,6 +49,24 @@ export default function InterviewReview() {
     })();
   }, [interviewId, getAuthHeaders, navigate]);
 
+  // Poll for transcript updates if any response still shows "Transcribing..."
+  useEffect(() => {
+    if (!interview || interview.status !== 'completed') return;
+    const hasTranscribing = (interview.responses || []).some(r => r.transcript === 'Transcribing...');
+    if (!hasTranscribing) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const res = await axios.get(`${API}/interviews/${interviewId}`, { headers: getAuthHeaders(), withCredentials: true });
+        setInterview(res.data);
+        const stillTranscribing = (res.data.responses || []).some(r => r.transcript === 'Transcribing...');
+        if (!stillTranscribing) clearInterval(pollInterval);
+      } catch { /* ignore polling errors */ }
+    }, 5000);
+
+    return () => clearInterval(pollInterval);
+  }, [interview?.status, interviewId, getAuthHeaders]);
+
   const sendToEmail = async () => {
     setSendingEmail(true);
     try {
@@ -123,7 +141,7 @@ export default function InterviewReview() {
                         </div>
                         {resp.recording_path && <Video className="w-3.5 h-3.5 text-primary" />}
                       </div>
-                      <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{resp.transcript || 'No transcript'}</p>
+                      <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{resp.transcript === 'Transcribing...' ? 'Transcription in progress...' : (resp.transcript || 'No transcript')}</p>
                     </CardContent>
                   </Card>
                 ))}
@@ -159,7 +177,14 @@ export default function InterviewReview() {
                     <Card className="border">
                       <CardContent className="p-6">
                         <div className="flex items-center gap-2 mb-3"><MessageSquare className="w-4 h-4 text-primary" /><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Transcript</p></div>
-                        <p className="text-sm leading-relaxed">{activeResp.transcript || 'No transcript available'}</p>
+                        {activeResp.transcript === 'Transcribing...' ? (
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>Transcription in progress... This will update automatically.</span>
+                          </div>
+                        ) : (
+                          <p className="text-sm leading-relaxed">{activeResp.transcript || 'No transcript available'}</p>
+                        )}
                       </CardContent>
                     </Card>
 

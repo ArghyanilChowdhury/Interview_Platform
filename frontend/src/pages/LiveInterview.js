@@ -58,8 +58,12 @@ export default function LiveInterview() {
   const recordStartTimeRef = useRef(0);
   const lastSpokenIndexRef = useRef(-1);
   const containerRef = useRef(null);
+  const currentIndexRef = useRef(0);
 
   const timeLimit = interview?.time_per_question || 120;
+
+  // Keep currentIndexRef in sync with state
+  useEffect(() => { currentIndexRef.current = currentIndex; }, [currentIndex]);
 
   // ==================== FULLSCREEN ====================
   const enterFullscreen = useCallback(async () => {
@@ -280,21 +284,22 @@ export default function LiveInterview() {
     if (isAutoStop) toast.info("Time's up! Auto-submitting your answer...");
 
     setSavingResponse(true);
-    const savedIndex = currentIndex;
+    // Use ref to get the CURRENT index, not a stale closure value
+    const savedIndex = currentIndexRef.current;
     const elapsed = Math.floor((Date.now() - recordStartTimeRef.current) / 1000);
     try {
       let recordingPath = null;
       if (chunksRef.current.length > 0) {
         const blob = new Blob(chunksRef.current, { type: 'video/webm' });
         const formData = new FormData();
-        formData.append('file', blob, `recording_${currentIndex}.webm`);
+        formData.append('file', blob, `recording_${savedIndex}.webm`);
         formData.append('interview_id', interviewId);
-        formData.append('question_index', currentIndex.toString());
+        formData.append('question_index', savedIndex.toString());
         const uploadRes = await axios.post(`${API}/recordings/upload`, formData, { headers: { ...getAuthHeaders(), 'Content-Type': 'multipart/form-data' }, withCredentials: true });
         recordingPath = uploadRes.data.recording_path;
       }
       await axios.post(`${API}/interviews/${interviewId}/responses`, {
-        question_index: currentIndex,
+        question_index: savedIndex,
         transcript: 'Transcribing...',
         recording_path: recordingPath,
         duration: elapsed
@@ -326,7 +331,11 @@ export default function LiveInterview() {
       }
     } catch { toast.error('Failed to save response'); }
     finally { setSavingResponse(false); }
-  }, [currentIndex, interviewId, getAuthHeaders, interview]);
+  }, [interviewId, getAuthHeaders, interview]);
+
+  // Keep doStopRecording ref current so interval always calls latest version
+  const doStopRecordingRef = useRef(doStopRecording);
+  useEffect(() => { doStopRecordingRef.current = doStopRecording; }, [doStopRecording]);
 
   const actuallyStartRecording = useCallback(() => {
     if (!streamRef.current || !mediaReady) return;
@@ -351,13 +360,13 @@ export default function LiveInterview() {
       countdownRef.current -= 1;
       const val = countdownRef.current;
       setCountdown(val);
-      if (val <= 0) { doStopRecording(true); }
+      if (val <= 0) { doStopRecordingRef.current(true); }
     }, 1000);
 
     isRecordingRef.current = true;
     setIsRecording(true);
     toast.info('Recording started!');
-  }, [timeLimit, mediaReady, initMedia, doStopRecording]);
+  }, [timeLimit, mediaReady, initMedia]);
 
   // Auto-start recording (called from prep timer)
   const autoStartRecording = useCallback(() => {
