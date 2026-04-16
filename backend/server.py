@@ -777,21 +777,20 @@ async def _transcribe_background(file_path: str, filename: str, interview_id: st
         if not api_key:
             return
         stt = OpenAISpeechToText(api_key=api_key)
-        # Pass file path directly - the library handles opening it
-        response = await stt.transcribe(
-            file=file_path,
-            model="whisper-1",
-            language="en",
-            response_format="json"
-        )
-        transcript = response.text if response and response.text else None
-        if transcript:
-            # Update the response transcript in the interview document
-            await db.interviews.update_one(
-                {"interview_id": interview_id, "responses.question_index": question_index},
-                {"$set": {"responses.$.transcript": transcript}}
+        with open(file_path, "rb") as audio_file:
+            response = await stt.transcribe(
+                file=audio_file,
+                model="whisper-1",
+                language="en",
+                response_format="json"
             )
-            logger.info(f"Whisper transcription done for {filename}: {transcript[:80]}...")
+            transcript = response.text if response and response.text else None
+            if transcript:
+                await db.interviews.update_one(
+                    {"interview_id": interview_id, "responses.question_index": question_index},
+                    {"$set": {"responses.$.transcript": transcript}}
+                )
+                logger.info(f"Whisper transcription successful for {filename}")
     except Exception as e:
         logger.error(f"Background Whisper transcription error for {filename}: {e}")
 
